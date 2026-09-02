@@ -45,6 +45,7 @@ def api_client():
     yield client
 
     running = False
+    thread.join(timeout=1.0)
 
 
 def test_health_check(api_client):
