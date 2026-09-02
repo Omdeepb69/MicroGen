@@ -29,16 +29,27 @@ class CUDADevice(Device):
 
     def get_memory_info(self) -> Dict[str, int]:
         if not self.is_available():
-            return {"total_bytes": 0, "allocated_bytes": 0, "free_bytes": 0}
+            return {
+                "total_bytes": 0,
+                "allocated_bytes": 0,
+                "reserved_bytes": 0,
+                "max_allocated_bytes": 0,
+                "max_reserved_bytes": 0,
+                "free_bytes": 0,
+            }
 
         total = torch.cuda.get_device_properties(self._device_index).total_memory
         allocated = torch.cuda.memory_allocated(self._device_index)
         reserved = torch.cuda.memory_reserved(self._device_index)
+        max_allocated = torch.cuda.max_memory_allocated(self._device_index)
+        max_reserved = torch.cuda.max_memory_reserved(self._device_index)
         free = total - allocated
         return {
             "total_bytes": total,
             "allocated_bytes": allocated,
             "reserved_bytes": reserved,
+            "max_allocated_bytes": max_allocated,
+            "max_reserved_bytes": max_reserved,
             "free_bytes": free,
         }
 
