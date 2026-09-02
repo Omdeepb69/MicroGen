@@ -85,6 +85,11 @@ class SpeculativeEngine:
         total_accepted = 0
         step_count = 0
 
+        if draft_cache is None:
+            draft_cache = KVCacheState()
+        if target_cache is None:
+            target_cache = KVCacheState()
+
         # Perform initial prefill for draft and target backends
         draft_logits, draft_cache = self.draft_backend.prefill(current_ids, cache=draft_cache)
         target_logits, target_cache = self.target_backend.prefill(current_ids, cache=target_cache)
@@ -144,8 +149,10 @@ class SpeculativeEngine:
 
             # 3. KV Cache Rollback handling on rejection
             if rejected and draft_cache is not None:
-                # Roll back remaining unaccepted draft tokens from draft KV cache
-                draft_cache.rollback(num_rejected_draft_tokens)
+                if hasattr(draft_cache, "rollback"):
+                    draft_cache.rollback(num_rejected_draft_tokens)
+                elif hasattr(draft_cache, "crop"):
+                    draft_cache.crop(max(0, len(draft_cache) - num_rejected_draft_tokens))
 
             # Update output token sequence tensor
             new_tokens_tensor = torch.tensor([accepted_in_step], device=current_ids.device)
