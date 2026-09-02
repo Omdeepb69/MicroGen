@@ -120,8 +120,16 @@ class KVCacheState(Cache):
         if layer_idx < len(self.key_cache) and self.key_cache[layer_idx] is not None:
             k = self.key_cache[layer_idx]
             assert k is not None
-            return k.shape[-2]
+            return int(k.shape[-2])
         return 0
+
+    def get_usable_length(self, new_seq_length: int, layer_idx: int = 0) -> int:
+        """Return usable sequence length for HuggingFace attention masking."""
+        return self.get_seq_length(layer_idx)
+
+    def get_max_length(self) -> Optional[int]:
+        """Return max allowed cache sequence length."""
+        return self.max_seq_len
 
     def get_max_cache_shape(self) -> Optional[int]:
         """Return max allowed cache sequence length."""
