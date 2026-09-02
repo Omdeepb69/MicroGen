@@ -53,6 +53,7 @@ class KVCacheState(Cache):
         sliding_window_size: Optional[int] = None,
         quantize_kv: bool = False,
     ) -> None:
+        self.layers: List[Any] = []
         self.max_seq_len = max_seq_len
         self.sliding_window_size = sliding_window_size
         self.quantize_kv = quantize_kv
@@ -61,6 +62,16 @@ class KVCacheState(Cache):
         self.key_scales: List[Optional[torch.Tensor]] = []
         self.value_scales: List[Optional[torch.Tensor]] = []
         self._seen_tokens = 0
+
+    def __bool__(self) -> bool:
+        """Ensure Cache instance evaluates to True in boolean contexts (e.g. if past_key_values:)."""
+        return True
+
+    def __len__(self) -> int:
+        """Return the number of tracked layers in the cache."""
+        return len(self.key_cache)
+
+
 
     def update(
         self,
@@ -112,7 +123,7 @@ class KVCacheState(Cache):
             self.value_cache[layer_idx] = v_out
 
         if layer_idx == 0:
-            self._seen_tokens = k_out.shape[-2]
+            self._seen_tokens = int(k_out.shape[-2])
         return k_out, v_out
 
     def get_seq_length(self, layer_idx: int = 0) -> int:
@@ -124,8 +135,8 @@ class KVCacheState(Cache):
         return 0
 
     def get_usable_length(self, new_seq_length: int, layer_idx: int = 0) -> int:
-        """Return usable sequence length for HuggingFace attention masking."""
-        return self.get_seq_length(layer_idx)
+        """Return usable total sequence length (past cached + new sequence length) for HuggingFace attention masking."""
+        return self.get_seq_length(layer_idx) + new_seq_length
 
     def get_max_length(self) -> Optional[int]:
         """Return max allowed cache sequence length."""
@@ -135,10 +146,14 @@ class KVCacheState(Cache):
         """Return max allowed cache sequence length."""
         return self.max_seq_len
 
-    def get_mask_sizes(self, query_length: int = 1, layer_idx: int = 0) -> Tuple[int, int]:
+    def get_mask_sizes(self, query_length: Any = 1, layer_idx: int = 0) -> Tuple[int, int]:
         """Return (past_length + query_length, 0) for HuggingFace attention mask calculation."""
+        if isinstance(query_length, torch.Tensor):
+            q_len = int(query_length.shape[-1]) if query_length.ndim > 0 else int(query_length.item())
+        else:
+            q_len = int(query_length)
         past_length = self.get_seq_length(layer_idx)
-        return past_length + query_length, 0
+        return past_length + q_len, 0
 
     def get_memory_usage_bytes(self) -> int:
         """Calculate total memory consumed by stored key and value tensors (and scale factors) in bytes."""

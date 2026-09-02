@@ -18,11 +18,23 @@ class SimpleKVCache(Cache):
 
     def __init__(self, num_layers: Optional[int] = None) -> None:
         """Initialize empty cache or pre-allocate slots for a given number of layers."""
+        self.layers: List[Any] = []
+        self._seen_tokens: int = 0
         self.key_cache: List[Optional[torch.Tensor]] = []
         self.value_cache: List[Optional[torch.Tensor]] = []
         if num_layers is not None and num_layers > 0:
             self.key_cache = [None] * num_layers
             self.value_cache = [None] * num_layers
+
+    def __bool__(self) -> bool:
+        """Ensure Cache instance evaluates to True in boolean contexts (e.g. if past_key_values:)."""
+        return True
+
+    def __len__(self) -> int:
+        """Return the number of tracked layers in the cache."""
+        return len(self.key_cache)
+
+
 
     @property
     def num_layers(self) -> int:
@@ -38,13 +50,29 @@ class SimpleKVCache(Cache):
         if layer_idx < len(self.key_cache) and self.key_cache[layer_idx] is not None:
             k = self.key_cache[layer_idx]
             if k is not None:
-                return k.shape[-2]
+                return int(k.shape[-2])
         return 0
 
-    def get_mask_sizes(self, query_length: int, layer_idx: int = 0) -> Tuple[int, int]:
-        """Get total key/value sequence length and offset for causal mask calculation."""
+    def get_mask_sizes(self, query_length: Any = 1, layer_idx: int = 0) -> Tuple[int, int]:
+        """Return total (kv_length, kv_offset) for HuggingFace masking utils."""
+        if isinstance(query_length, torch.Tensor):
+            q_len = int(query_length.shape[-1]) if query_length.ndim > 0 else int(query_length.item())
+        else:
+            q_len = int(query_length)
         past_length = self.get_seq_length(layer_idx)
-        return past_length + query_length, 0
+        return past_length + q_len, 0
+
+    def get_usable_length(self, new_seq_length: int, layer_idx: int = 0) -> int:
+        """Return usable total sequence length for HuggingFace attention masking."""
+        return self.get_seq_length(layer_idx) + new_seq_length
+
+    def get_max_length(self) -> Optional[int]:
+        """Return max allowed cache sequence length."""
+        return None
+
+    def get_max_cache_shape(self) -> Optional[int]:
+        """Return max allowed cache sequence length."""
+        return None
 
     def update(
         self,
@@ -55,16 +83,7 @@ class SimpleKVCache(Cache):
         *args: Any,
         **kwargs: Any,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Update cache for a specific layer by appending new key and value states.
-
-        Args:
-            key_states: Tensor of shape (batch_size, num_heads, seq_len, head_dim).
-            value_states: Tensor of shape (batch_size, num_heads, seq_len, head_dim).
-            layer_idx: Index of the transformer layer being updated.
-
-        Returns:
-            Tuple of (concatenated_key, concatenated_value) for layer_idx.
-        """
+        """Update cache for a specific layer by appending new key and value states."""
         while len(self.key_cache) <= layer_idx:
             self.key_cache.append(None)
             self.value_cache.append(None)
@@ -82,7 +101,12 @@ class SimpleKVCache(Cache):
         k_out = self.key_cache[layer_idx]
         v_out = self.value_cache[layer_idx]
         assert k_out is not None and v_out is not None
+
+        if layer_idx == 0:
+            self._seen_tokens = int(k_out.shape[-2])
+
         return k_out, v_out
+
 
     def update_layer(
         self, layer_idx: int, key_states: torch.Tensor, value_states: torch.Tensor

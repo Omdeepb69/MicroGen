@@ -7,6 +7,50 @@ from transformers import AutoModelForCausalLM, PreTrainedModel
 from microgen.devices import Device, get_device
 from microgen.backends.base import InferenceBackend
 
+# Compatibility fix for transformers SDPA causal mask handling with tensor kv_length
+try:
+    import transformers.masking_utils
+    _orig_ignore_causal_mask_sdpa = transformers.masking_utils._ignore_causal_mask_sdpa
+    _orig_prepare_padding_mask = transformers.masking_utils.prepare_padding_mask
+    _orig_sdpa_mask = transformers.masking_utils.sdpa_mask
+
+    def _coerce_kv_length(val: Any) -> Any:
+        if isinstance(val, torch.Tensor) and val.dtype in (torch.int32, torch.int64, torch.long):
+            return int(val.shape[-1]) if val.ndim > 0 else int(val.item())
+        return val
+
+    def _safe_ignore_causal_mask_sdpa(*args: Any, **kwargs: Any) -> bool:
+        args_list = list(args)
+        if "kv_length" in kwargs:
+            kwargs["kv_length"] = _coerce_kv_length(kwargs["kv_length"])
+        elif len(args_list) >= 3:
+            args_list[2] = _coerce_kv_length(args_list[2])
+        return _orig_ignore_causal_mask_sdpa(*args_list, **kwargs)
+
+    def _safe_prepare_padding_mask(*args: Any, **kwargs: Any) -> Optional[torch.Tensor]:
+        args_list = list(args)
+        if "kv_length" in kwargs:
+            kwargs["kv_length"] = _coerce_kv_length(kwargs["kv_length"])
+        elif len(args_list) >= 2:
+            args_list[1] = _coerce_kv_length(args_list[1])
+        return _orig_prepare_padding_mask(*args_list, **kwargs)
+
+    def _safe_sdpa_mask(*args: Any, **kwargs: Any) -> Any:
+        args_list = list(args)
+        if "kv_length" in kwargs:
+            kwargs["kv_length"] = _coerce_kv_length(kwargs["kv_length"])
+        elif len(args_list) >= 3:
+            args_list[2] = _coerce_kv_length(args_list[2])
+        return _orig_sdpa_mask(*args_list, **kwargs)
+
+    transformers.masking_utils._ignore_causal_mask_sdpa = _safe_ignore_causal_mask_sdpa
+    transformers.masking_utils.prepare_padding_mask = _safe_prepare_padding_mask
+    transformers.masking_utils.sdpa_mask = _safe_sdpa_mask
+    if hasattr(transformers.masking_utils, "ALL_MASK_ATTENTION_FUNCTIONS") and "sdpa" in transformers.masking_utils.ALL_MASK_ATTENTION_FUNCTIONS:
+        transformers.masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = _safe_sdpa_mask
+except (ImportError, AttributeError):
+    pass
+
 
 class PyTorchBackend(InferenceBackend):
     """PyTorch execution backend for Causal LM inference across CPU and CUDA devices."""
@@ -64,6 +108,8 @@ class PyTorchBackend(InferenceBackend):
                 use_cache=True,
             )
 
+
+
         logits = outputs.logits[:, -1, :]
         updated_cache = getattr(outputs, "past_key_values", cache)
         return logits, updated_cache
@@ -74,7 +120,7 @@ class PyTorchBackend(InferenceBackend):
         attention_mask: Optional[torch.Tensor] = None,
         cache: Optional[Any] = None,
     ) -> Tuple[torch.Tensor, Any]:
-        """Perform single-token decode pass with KV cache on hardware device."""
+        """Perform single token decode step using cached KV states."""
         if self._model is None:
             raise RuntimeError("Model is not loaded. Call load_model() first.")
 
@@ -93,6 +139,7 @@ class PyTorchBackend(InferenceBackend):
         logits = outputs.logits[:, -1, :]
         updated_cache = getattr(outputs, "past_key_values", cache)
         return logits, updated_cache
+
 
     def sample(
         self,
