@@ -1,0 +1,8 @@
+torch
+transformers
+pytest
+fastapi
+uvicorn
+httpx
+click
+pydantic

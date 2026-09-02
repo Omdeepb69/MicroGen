@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py$class
+
+# Virtual environments
+mgmg/
+venv/
+.venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Agent & System Metadata
+.agents/
+.gemini/
+.idea/
+.vscode/
+*.log
+
+# Benchmark Output Artifacts
+benchmark_results.json
+kaggle_benchmark_results.json
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.tmp
