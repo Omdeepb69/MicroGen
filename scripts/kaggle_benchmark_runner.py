@@ -267,7 +267,8 @@ def run_benchmarks(prompt: str = "MicroGen LLM inference engine delivers high pe
         throughput_tps = gen_tokens / total_time_sec if total_time_sec > 0 else 0.0
 
         mem_info = backend.get_memory_usage()
-        memory_mb = mem_info.get("vram_used_bytes", mem_info.get("ram_used_bytes", 0)) / (1024 * 1024)
+        used_bytes = mem_info.get("allocated_bytes", mem_info.get("reserved_bytes", mem_info.get("ram_used_bytes", mem_info.get("vram_used_bytes", 0))))
+        memory_mb = used_bytes / (1024 * 1024)
 
         results["backends"][name] = {
             "ttft_ms": round(ttft_ms, 2),
