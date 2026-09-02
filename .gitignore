@@ -24,10 +24,16 @@ htmlcov/
 .idea/
 .vscode/
 *.log
+AGENTS.md
+ARCHITECTURE.md
+PROJECT_PLAN.md
+full_overview.md
 
 # Benchmark Output Artifacts
 benchmark_results.json
 kaggle_benchmark_results.json
+microgen_benchmark_report.html
+*.html
 
 # Operating System Files
 .DS_Store
