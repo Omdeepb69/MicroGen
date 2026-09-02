@@ -208,27 +208,39 @@ def generate_html_report(results: Dict[str, Any], output_path: str = "microgen_b
 
 def run_benchmarks(prompt: str = "MicroGen LLM inference engine delivers high performance", gen_tokens: int = 16) -> Dict[str, Any]:
     """Execute end-to-end performance benchmarks across available backends."""
-    device = get_device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device("cuda:0" if torch.cuda.is_available() else "cpu")
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+
     results = {
         "model_name": MODEL_NAME,
         "cuda_available": torch.cuda.is_available(),
-        "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        "device_count": num_gpus,
+        "device_name": device_name,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "backends": {},
     }
+
+    # Setup multi-GPU devices if available (e.g. Kaggle T4 x2)
+    if num_gpus >= 2:
+        tp_devices = [get_device(f"cuda:{i}") for i in range(num_gpus)]
+        tp_world_size = num_gpus
+    else:
+        tp_devices = [device, device]
+        tp_world_size = 2
 
     # Define backend configurations to test
     configurations = [
         ("PyTorch (FP32)", PyTorchBackend(device=device)),
         ("QuantizedPyTorch (INT8)", QuantizedPyTorchBackend(device=device)),
-        ("TensorParallelPyTorch (TP=2)", TensorParallelPyTorchBackend(world_size=2, devices=[device, device])),
+        (f"TensorParallelPyTorch (TP={tp_world_size})", TensorParallelPyTorchBackend(world_size=tp_world_size, devices=tp_devices)),
     ]
 
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     for name, backend in configurations:
-        print(f"Benchmarking backend: {name}...")
+        print(f"--> Benchmarking backend: {name} on {device_name}...")
         backend.load_model(MODEL_NAME)
         input_ids = tokenizer(prompt, return_tensors="pt").input_ids
 
@@ -268,17 +280,29 @@ def run_benchmarks(prompt: str = "MicroGen LLM inference engine delivers high pe
 
 
 def main() -> None:
-    print("Starting MicroGen Kaggle & Multi-GPU Benchmark Suite...")
+    print("=" * 70)
+    print("⚡ MicroGen Kaggle & Multi-GPU Benchmark Suite")
+    print("=" * 70)
+    
     results = run_benchmarks()
 
     # Save JSON metrics
     json_path = "kaggle_benchmark_results.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
-    print(f"Benchmark results saved to {json_path}")
+    print(f"\n[+] Benchmark metrics saved to: {json_path}")
 
     # Render HTML Report
     generate_html_report(results, output_path="microgen_benchmark_report.html")
+
+    print("\n" + "=" * 70)
+    print("📊 BENCHMARK SUMMARY RESULTS TABLE")
+    print("=" * 70)
+    print(f"{'Backend':<32} | {'TTFT (ms)':<10} | {'ITL (ms)':<10} | {'TPS':<10} | {'Memory (MB)':<12}")
+    print("-" * 80)
+    for b_name, m in results["backends"].items():
+        print(f"{b_name:<32} | {m['ttft_ms']:<10} | {m['itl_ms']:<10} | {m['throughput_tps']:<10} | {m['memory_mb']:<12}")
+    print("=" * 80)
 
 
 if __name__ == "__main__":
