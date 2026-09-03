@@ -30,7 +30,7 @@ class Request:
     top_p: float = 0.0
     priority: int = 0  # Higher value indicates higher scheduling priority
     status: RequestStatus = RequestStatus.PENDING
-    arrival_time: float = field(default_factory=time.time)
+    arrival_time: float = field(default_factory=time.perf_counter)
     start_time: Optional[float] = None
     finish_time: Optional[float] = None
     generated_token_ids: List[int] = field(default_factory=list)
@@ -98,7 +98,7 @@ class RequestQueue:
                 req = self._requests.get(req_id)
                 if req and req.status == RequestStatus.PENDING:
                     req.status = RequestStatus.RUNNING
-                    req.start_time = time.time()
+                    req.start_time = time.perf_counter()
                     return req
             return None
 
@@ -112,7 +112,7 @@ class RequestQueue:
                 req = self._requests.get(req_id)
                 if req and req.status == RequestStatus.PENDING:
                     req.status = RequestStatus.RUNNING
-                    req.start_time = time.time()
+                    req.start_time = time.perf_counter()
                     batch.append(req)
         return batch
 
@@ -122,7 +122,7 @@ class RequestQueue:
             req = self._requests.get(request_id)
             if req and not req.is_finished:
                 req.status = RequestStatus.CANCELLED
-                req.finish_time = time.time()
+                req.finish_time = time.perf_counter()
                 if request_id in self._pending_ids:
                     self._pending_ids.remove(request_id)
                 return True

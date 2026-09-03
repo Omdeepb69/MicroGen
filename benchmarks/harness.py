@@ -6,12 +6,15 @@ warmup execution, host-device synchronization, percentile statistics (p50, p90, 
 and structured JSONL output logging to results/raw/experiments.jsonl.
 """
 
+import datetime
 import gc
 import json
 import math
 import os
+import subprocess
+import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 import torch
 
@@ -55,17 +58,32 @@ def reset_environment() -> None:
         torch.cuda.synchronize()
 
 
+def get_git_commit() -> str:
+    """Returns current git commit hash if inside a git repository."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
+    except Exception:
+        return "git-commit-unknown"
+
+
 @dataclass
 class ExperimentConfig:
-    """Configuration metadata for an empirical inference experiment."""
+    """Configuration metadata and provenance for an empirical inference experiment."""
     model_name: str
     optimization_name: str
     baseline_type: str  # 'hf_pytorch', 'microgen_unoptimized', 'microgen_optimized'
     n_trials: int = 30
-    warmup_trials: int = 2
+    warmup_trials: int = 5
     device: str = "cpu"
+    seed: int = 42
     output_dir: str = "results/raw"
     jsonl_filename: str = "experiments.jsonl"
+    git_commit: str = field(default_factory=get_git_commit)
+    wall_clock_timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+    python_version: str = field(default_factory=lambda: sys.version.split()[0])
+    pytorch_version: str = field(default_factory=lambda: torch.__version__)
+    cuda_version: str = field(default_factory=lambda: torch.version.cuda if torch.cuda.is_available() else "none")
+    hardware_name: str = field(default_factory=lambda: torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
 
 
 @dataclass

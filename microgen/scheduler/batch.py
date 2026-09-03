@@ -107,7 +107,7 @@ def update_requests_with_sampled_tokens(
         raise ValueError("Length mismatch between requests and sampled_token_ids.")
 
     completed_ids: List[str] = []
-    current_time = time.time()
+    current_time = time.perf_counter()
 
     for req, token_id in zip(requests, sampled_token_ids):
         if req.is_finished:

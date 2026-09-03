@@ -1,0 +1,14 @@
+{
+  "experiment_name": "context_scaling",
+  "description": "Evaluates TTFT and TPOT performance as prompt context length scales from 128 to 8192 tokens.",
+  "models": [
+    "sshleifer/tiny-gpt2",
+    "gpt2",
+    "Qwen/Qwen2.5-0.5B"
+  ],
+  "context_lengths": [128, 256, 512, 1024, 2048, 4096, 8192],
+  "max_new_tokens": 16,
+  "n_trials": 30,
+  "warmup_trials": 5,
+  "seed": 42
+}

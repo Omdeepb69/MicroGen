@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 
 def load_experiment_records(jsonl_path: str = "results/raw/experiments.jsonl") -> List[Dict[str, Any]]:
-    """Loads benchmark records from JSONL file or generates synthetic records if missing/empty."""
+    """Loads benchmark records from JSONL file. Raises RuntimeError if file is missing or empty."""
     records = []
     if os.path.exists(jsonl_path):
         with open(jsonl_path, "r", encoding="utf-8") as f:
@@ -25,58 +25,10 @@ def load_experiment_records(jsonl_path: str = "results/raw/experiments.jsonl") -
                         pass
 
     if not records:
-        records = _generate_synthetic_table_records()
-
-    return records
-
-
-def _generate_synthetic_table_records() -> List[Dict[str, Any]]:
-    """Generates synthetic records representing paper experiment outcomes."""
-    records = []
-
-    # Main results summary
-    configs = [
-        ("Baseline FP32 (HF PyTorch)", "baseline_fp32", 45.2, 12.8, 1024.0, 42.5, 1.00),
-        ("+ INT8 Quantization", "opt_int8", 41.0, 10.2, 280.0, 58.2, 1.37),
-        ("+ Paged KV Cache", "opt_paged", 38.5, 9.4, 620.0, 68.0, 1.60),
-        ("+ Prefix Cache Reuse", "opt_prefix", 18.2, 9.1, 710.0, 92.4, 2.17),
-        ("MicroGen (All Combined)", "opt_all_combined", 12.4, 6.8, 240.0, 142.0, 3.34),
-    ]
-    for name, opt_key, ttft, tpot, vram, tp, speedup in configs:
-        records.append({
-            "experiment_name": "main_results",
-            "config_label": name,
-            "optimization_key": opt_key,
-            "metrics": {
-                "ttft_ms": ttft,
-                "tpot_ms": tpot,
-                "vram_allocated_mb": vram,
-                "throughput_tok_per_sec": tp,
-                "speedup_multiplier": speedup,
-            },
-        })
-
-    # Batching scaling
-    for b in [1, 2, 4, 8, 16, 32, 64]:
-        records.append({
-            "experiment_name": "batching_concurrency",
-            "batch_size": b,
-            "static_tp": 40.0 * (b ** 0.5),
-            "continuous_tp": 75.0 * (b ** 0.6),
-            "static_tpot": 10.0 + 3.0 * b,
-            "continuous_tpot": 8.0 + 1.2 * b,
-        })
-
-    # Memory pressure
-    for capacity_pct in [25, 50, 75, 100]:
-        records.append({
-            "experiment_name": "paged_memory_pressure",
-            "capacity_pct": capacity_pct,
-            "contiguous_frag_pct": 35.0 - 0.2 * capacity_pct,
-            "paged_frag_pct": 2.1 + 0.05 * capacity_pct,
-            "contiguous_oom": capacity_pct <= 25,
-            "paged_oom": False,
-        })
+        raise RuntimeError(
+            f"No empirical benchmark records found in {jsonl_path}! "
+            "Mock synthetic fallbacks are strictly disabled. Run benchmark sweeps first."
+        )
 
     return records
 
@@ -96,18 +48,18 @@ def export_table1_main_results(records: List[Dict[str, Any]], tables_dir: str) -
         r"\hline",
     ]
 
-    main_recs = [r for r in records if r.get("experiment_name") == "main_results"]
+    main_recs = [r for r in records if r.get("workload_name") or r.get("experiment_name") == "main_results"]
     if not main_recs:
-        main_recs = _generate_synthetic_table_records()[:5]
+        main_recs = records[:5]
 
     for rec in main_recs:
-        label = rec.get("config_label", rec.get("optimization_key", "Config"))
-        m = rec.get("metrics", {})
-        ttft = m.get("ttft_ms", 0.0)
-        tpot = m.get("tpot_ms", 0.0)
-        vram = m.get("vram_allocated_mb", 0.0)
-        tp = m.get("throughput_tok_per_sec", 0.0)
-        sp = m.get("speedup_multiplier", 1.0)
+        cfg = rec.get("config", {})
+        label = cfg.get("optimization_name", rec.get("config_label", "Config"))
+        ttft = rec.get("ttft_stats_ms", {}).get("mean", rec.get("metrics", {}).get("ttft_ms", 0.0))
+        tpot = rec.get("tpot_stats_ms", {}).get("mean", rec.get("metrics", {}).get("tpot_ms", 0.0))
+        vram = rec.get("peak_allocated_mb_stats", {}).get("mean", rec.get("metrics", {}).get("vram_allocated_mb", 0.0))
+        tp = rec.get("throughput_stats_tps", {}).get("mean", rec.get("metrics", {}).get("throughput_tok_per_sec", 0.0))
+        sp = rec.get("speedup_multiplier", 1.0)
         line = f"  {label} & {ttft:.1f} & {tpot:.1f} & {vram:.0f} & {tp:.1f} & {sp:.2f}$\\times$ \\\\"
         table_lines.append(line)
 
@@ -139,16 +91,16 @@ def export_table2_concurrency_scaling(records: List[Dict[str, Any]], tables_dir:
         r"\hline",
     ]
 
-    batch_recs = [r for r in records if r.get("experiment_name") == "batching_concurrency"]
+    batch_recs = [r for r in records if "batching" in r.get("workload_name", "") or r.get("experiment_name") == "batching_concurrency"]
     if not batch_recs:
-        batch_recs = [r for r in _generate_synthetic_table_records() if r.get("experiment_name") == "batching_concurrency"]
+        batch_recs = records
 
     for rec in batch_recs:
-        b = rec.get("batch_size", 1)
-        stp = rec.get("static_tp", rec.get("metrics", {}).get("throughput_tok_per_sec", 0.0))
-        ctp = rec.get("continuous_tp", rec.get("metrics", {}).get("throughput_tok_per_sec", 0.0) * 1.5)
-        stpot = rec.get("static_tpot", rec.get("metrics", {}).get("tpot_ms", 10.0))
-        ctpot = rec.get("continuous_tpot", rec.get("metrics", {}).get("tpot_ms", 8.0))
+        b = rec.get("batch_size", rec.get("num_requests", 1))
+        stp = rec.get("static_tp", rec.get("throughput_stats_tps", {}).get("mean", 0.0))
+        ctp = rec.get("continuous_tp", rec.get("throughput_stats_tps", {}).get("mean", 0.0))
+        stpot = rec.get("static_tpot", rec.get("tpot_stats_ms", {}).get("mean", 0.0))
+        ctpot = rec.get("continuous_tpot", rec.get("tpot_stats_ms", {}).get("mean", 0.0))
         line = f"  {b} & {stp:.1f} & {ctp:.1f} & {stpot:.1f} & {ctpot:.1f} \\\\"
         table_lines.append(line)
 
@@ -180,14 +132,14 @@ def export_table3_memory_ablation(records: List[Dict[str, Any]], tables_dir: str
         r"\hline",
     ]
 
-    mem_recs = [r for r in records if r.get("experiment_name") == "paged_memory_pressure"]
+    mem_recs = [r for r in records if "paged" in r.get("workload_name", "") or r.get("experiment_name") == "paged_memory_pressure"]
     if not mem_recs:
-        mem_recs = [r for r in _generate_synthetic_table_records() if r.get("experiment_name") == "paged_memory_pressure"]
+        mem_recs = records
 
     for rec in mem_recs:
         cap = rec.get("capacity_pct", 100)
-        cfrag = rec.get("contiguous_frag_pct", 30.0)
-        pfrag = rec.get("paged_frag_pct", 3.0)
+        cfrag = rec.get("contiguous_frag_pct", 0.0)
+        pfrag = rec.get("paged_frag_pct", 0.0)
         coom = "Yes" if rec.get("contiguous_oom", False) else "No"
         poom = "Yes" if rec.get("paged_oom", False) else "No"
         line = f"  {cap}\\% & {cfrag:.1f}\\% & {pfrag:.1f}\\% & {coom} & {poom} \\\\"

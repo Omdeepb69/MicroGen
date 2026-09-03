@@ -1,0 +1,15 @@
+{
+  "experiment_name": "prefix_cache",
+  "description": "Evaluates shared-prefix cache hit rate and TTFT latency across shared prefix ratios from 0.0 to 1.0.",
+  "models": [
+    "sshleifer/tiny-gpt2",
+    "gpt2",
+    "Qwen/Qwen2.5-0.5B"
+  ],
+  "shared_prefix_ratios": [0.0, 0.15, 0.25, 0.50, 0.75, 0.90, 1.00],
+  "num_requests": 16,
+  "max_new_tokens": 16,
+  "n_trials": 30,
+  "warmup_trials": 5,
+  "seed": 42
+}

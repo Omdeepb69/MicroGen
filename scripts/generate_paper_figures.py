@@ -22,7 +22,7 @@ plt.rcParams["axes.linewidth"] = 0.8
 
 
 def load_experiment_data(jsonl_path: str = "results/raw/experiments.jsonl") -> List[Dict[str, Any]]:
-    """Loads experiment records from JSONL file. Returns synthetic records if missing or empty."""
+    """Loads experiment records from JSONL file. Raises RuntimeError if file is missing or empty."""
     records = []
     if os.path.exists(jsonl_path):
         with open(jsonl_path, "r", encoding="utf-8") as f:
@@ -35,66 +35,12 @@ def load_experiment_data(jsonl_path: str = "results/raw/experiments.jsonl") -> L
                         pass
 
     if not records:
-        # Fallback synthetic records for testing/initial generation
-        records = _generate_synthetic_paper_records()
+        raise RuntimeError(
+            f"No empirical benchmark records found in {jsonl_path}! "
+            "Mock synthetic fallbacks are strictly disabled. Run benchmark sweeps first."
+        )
 
     return records
-
-
-def _generate_synthetic_paper_records() -> List[Dict[str, Any]]:
-    """Generates synthetic records representing paper experiment outcomes."""
-    synthetic = []
-    # Context scaling
-    for seq_len in [32, 128, 512, 1024, 2048]:
-        synthetic.append({
-            "experiment_name": "context_sweep",
-            "model_name": "gpt2",
-            "optimization_name": "baseline_fp32",
-            "prompt_len": seq_len,
-            "metrics": {"ttft_ms": 12.0 + 0.05 * seq_len, "tpot_ms": 8.5 + 0.002 * seq_len},
-        })
-        synthetic.append({
-            "experiment_name": "context_sweep",
-            "model_name": "gpt2",
-            "optimization_name": "opt_paged_int8",
-            "prompt_len": seq_len,
-            "metrics": {"ttft_ms": 8.0 + 0.03 * seq_len, "tpot_ms": 5.2 + 0.001 * seq_len},
-        })
-
-    # Prefix ratio sweep
-    for ratio in [0.0, 0.25, 0.50, 0.75, 0.90, 1.0]:
-        synthetic.append({
-            "experiment_name": "prefix_sharing",
-            "model_name": "gpt2",
-            "prefix_ratio": ratio,
-            "metrics": {"ttft_ms": 45.0 * (1.0 - 0.85 * ratio), "hit_rate": ratio},
-        })
-
-    # Quantization pareto
-    for quant_type in ["fp32", "fp16", "int8_per_channel"]:
-        vram = 1000.0 if quant_type == "fp32" else (520.0 if quant_type == "fp16" else 280.0)
-        synthetic.append({
-            "experiment_name": "quant_lifecycle",
-            "quant_type": quant_type,
-            "metrics": {"vram_allocated_mb": vram, "vram_reserved_mb": vram * 1.15},
-        })
-
-    # Batching concurrency
-    for b in [1, 2, 4, 8, 16, 32, 64]:
-        synthetic.append({
-            "experiment_name": "batching_concurrency",
-            "batch_size": b,
-            "batching_mode": "static",
-            "metrics": {"throughput_tok_per_sec": 40.0 * np.log2(b + 1), "tpot_ms": 10.0 + 3.0 * b},
-        })
-        synthetic.append({
-            "experiment_name": "batching_concurrency",
-            "batch_size": b,
-            "batching_mode": "continuous",
-            "metrics": {"throughput_tok_per_sec": 75.0 * np.log2(b + 1), "tpot_ms": 8.0 + 1.2 * b},
-        })
-
-    return synthetic
 
 
 def plot_fig1_context_scaling(records: List[Dict[str, Any]], output_dir: str) -> List[str]:

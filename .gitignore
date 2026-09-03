@@ -34,6 +34,9 @@ benchmark_results.json
 kaggle_benchmark_results.json
 microgen_benchmark_report.html
 *.html
+results/
+paper/
+microgen_paper_results/
 
 # Operating System Files
 .DS_Store

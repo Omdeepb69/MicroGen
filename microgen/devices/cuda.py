@@ -53,5 +53,9 @@ class CUDADevice(Device):
             "free_bytes": free,
         }
 
+    def reset_memory_stats(self) -> None:
+        if self.is_available():
+            torch.cuda.reset_peak_memory_stats(self._device_index)
+
     def to_device(self, tensor: torch.Tensor) -> torch.Tensor:
         return tensor.to(self._device)

@@ -1,0 +1,15 @@
+{
+  "experiment_name": "batching",
+  "description": "Evaluates static chunked batching vs continuous batching scheduler across batch size capacity B in [1, 64].",
+  "models": [
+    "sshleifer/tiny-gpt2",
+    "gpt2",
+    "Qwen/Qwen2.5-0.5B"
+  ],
+  "batch_sizes": [1, 2, 4, 8, 16, 32, 64],
+  "num_requests": 64,
+  "max_new_tokens": 16,
+  "n_trials": 30,
+  "warmup_trials": 5,
+  "seed": 42
+}
