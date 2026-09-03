@@ -76,6 +76,45 @@ def create_uncached_prefix_execution_fn(
     return execution_fn
 
 
+def clone_and_slice_cache(cache: Any, prefix_len: Optional[int] = None) -> Any:
+    """Clone and optionally slice KV cache across PyTorch tuple and DynamicCache structures."""
+    if cache is None:
+        return None
+    if isinstance(cache, tuple):
+        if prefix_len is not None:
+            return tuple((k[..., :prefix_len, :].clone(), v[..., :prefix_len, :].clone()) for k, v in cache)
+        return tuple((k.clone(), v.clone()) for k, v in cache)
+    if hasattr(cache, "layers"):
+        try:
+            from transformers.cache_utils import DynamicCache, DynamicLayer
+            new_cache = DynamicCache()
+            for layer in cache.layers:
+                new_layer = DynamicLayer()
+                k = layer.keys if prefix_len is None else layer.keys[..., :prefix_len, :]
+                v = layer.values if prefix_len is None else layer.values[..., :prefix_len, :]
+                new_layer.keys = k.clone()
+                new_layer.values = v.clone()
+                new_layer.is_initialized = True
+                new_layer.dtype = k.dtype
+                new_layer.device = k.device
+                new_cache.layers.append(new_layer)
+            return new_cache
+        except Exception:
+            pass
+    if hasattr(cache, "key_cache") and hasattr(cache, "value_cache"):
+        try:
+            from transformers.cache_utils import DynamicCache
+            new_cache = DynamicCache()
+            for idx, (k, v) in enumerate(zip(cache.key_cache, cache.value_cache)):
+                k_sub = k if prefix_len is None else k[..., :prefix_len, :]
+                v_sub = v if prefix_len is None else v[..., :prefix_len, :]
+                new_cache.update(k_sub.clone(), v_sub.clone(), layer_idx=idx)
+            return new_cache
+        except Exception:
+            pass
+    return cache
+
+
 def create_cached_prefix_execution_fn(
     model_name: str,
     workload: WorkloadSuite,
@@ -102,16 +141,17 @@ def create_cached_prefix_execution_fn(
                 cache_hits += 1
                 matched_len, cached_kv_state = match
                 remaining_prompt_ids = req.prompt_ids[matched_len:]
+                cloned_kv_state = clone_and_slice_cache(cached_kv_state)
 
                 t0_prefill = time.perf_counter()
                 if remaining_prompt_ids:
                     rem_tensor = torch.tensor([remaining_prompt_ids], dtype=torch.long, device=device_obj.torch_device)
-                    # Use cached KV state as past_key_values for remaining prefill
-                    logits, kv_cache = backend.prefill(rem_tensor, cache=cached_kv_state)
+                    # Use cloned KV state as past_key_values for remaining prefill
+                    logits, kv_cache = backend.prefill(rem_tensor, cache=cloned_kv_state)
                 else:
                     # Exact 100% prefix hit: single decode evaluation
                     last_id = torch.tensor([[req.prompt_ids[-1]]], dtype=torch.long, device=device_obj.torch_device)
-                    logits, kv_cache = backend.decode(last_id, cache=cached_kv_state)
+                    logits, kv_cache = backend.decode(last_id, cache=cloned_kv_state)
 
                 device_obj.synchronize()
                 t1_prefill = time.perf_counter()
@@ -129,7 +169,8 @@ def create_cached_prefix_execution_fn(
                 # Cache shared prefix for future requests if prefix_ratio > 0
                 prefix_len = int(req.prompt_len * prefix_ratio)
                 if prefix_len > 0:
-                    prefix_cache.insert(req.prompt_ids[:prefix_len], kv_cache)
+                    sliced_kv = clone_and_slice_cache(kv_cache, prefix_len)
+                    prefix_cache.insert(req.prompt_ids[:prefix_len], sliced_kv)
 
             # Decode loop
             curr_token = torch.argmax(logits, dim=-1, keepdim=True)
