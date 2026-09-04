@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\centering
+\caption{System Feature \& Architectural Positioning Comparison. Unlike production serving engines optimized for monolithic peak performance, \textsf{MicroGen} is designed specifically as an empirical research substrate providing protocol-based modular isolation for single-variable micro-ablations under identical workload and measurement conditions.}
+\label{tab:systems_comparison}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc cc}
+\toprule
+\textbf{System} & \textbf{Paged KV} & \textbf{Prefix Cache} & \textbf{Continuous Batching} & \textbf{Quantization} & \textbf{Speculative Decoding} & \textbf{Tensor Parallel} & \textbf{Primary Focus} & \textbf{Modular Isolation} \\
+\midrule
+Orca~\cite{yu2022orca} & \textsf{No} & \textsf{No} & \checkmark (Iteration-level) & \textsf{No} & \textsf{No} & \textsf{No} & Production Serving & \textsf{Monolithic} \\
+vLLM~\cite{kwon2023pagedattention} & \checkmark (PagedAttention) & \checkmark (Automatic) & \checkmark (Chunked) & \checkmark (AWQ/GPTQ) & \checkmark (Draft Model) & \checkmark & Production Serving & \textsf{Monolithic Engine} \\
+SGLang~\cite{zheng2024sglang} & \checkmark (RadixAttention) & \checkmark (Radix Tree) & \checkmark (Dynamic) & \checkmark (INT8/FP8) & \checkmark (Eagle/Medusa) & \checkmark & Programmatic Serving & \textsf{Monolithic Runtime} \\
+TensorRT-LLM & \checkmark (Paged KV) & \checkmark (KV Cache Reuse) & \checkmark (In-Flight) & \checkmark (SmoothQuant/FP8) & \checkmark (Lookahead/Draft) & \checkmark & Production GPU Engine & \textsf{Monolithic C++} \\
+\midrule
+\textbf{\textsf{MicroGen} (Ours)} & \checkmark (\texttt{PagedKV}) & \checkmark (\textsf{Hash-Cache}) & \checkmark (\texttt{Scheduler}) & \checkmark (\texttt{Quantized}) & \checkmark (\texttt{Speculative}) & \checkmark (\texttt{Parallel}) & \textbf{Empirical Research} & \textbf{\checkmark (Protocol Substrate)} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}

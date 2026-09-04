@@ -40,7 +40,7 @@ def export_table1_main_results(records: List[Dict[str, Any]], tables_dir: str) -
     table_lines = [
         r"\begin{table}[h]",
         r"\centering",
-        r"\caption{Inference Performance & Optimization Synergy Breakdown on GPU.}",
+        r"\caption{Inference Performance \& Optimization Synergy Breakdown on GPU.}",
         r"\label{tab:main_results}",
         r"\begin{tabular}{lrrrrr}",
         r"\hline",
@@ -55,12 +55,13 @@ def export_table1_main_results(records: List[Dict[str, Any]], tables_dir: str) -
     for rec in main_recs:
         cfg = rec.get("config", {})
         label = cfg.get("optimization_name", rec.get("config_label", "Config"))
+        clean_label = label.replace("_", r"\_")
         ttft = rec.get("ttft_stats_ms", {}).get("mean", rec.get("metrics", {}).get("ttft_ms", 0.0))
         tpot = rec.get("tpot_stats_ms", {}).get("mean", rec.get("metrics", {}).get("tpot_ms", 0.0))
         vram = rec.get("peak_allocated_mb_stats", {}).get("mean", rec.get("metrics", {}).get("vram_allocated_mb", 0.0))
         tp = rec.get("throughput_stats_tps", {}).get("mean", rec.get("metrics", {}).get("throughput_tok_per_sec", 0.0))
         sp = rec.get("speedup_multiplier", 1.0)
-        line = f"  {label} & {ttft:.1f} & {tpot:.1f} & {vram:.0f} & {tp:.1f} & {sp:.2f}$\\times$ \\\\"
+        line = f"  {clean_label} & {ttft:.1f} & {tpot:.1f} & {vram:.0f} & {tp:.1f} & {sp:.2f}$\\times$ \\\\"
         table_lines.append(line)
 
     table_lines.extend([
