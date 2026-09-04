@@ -118,11 +118,14 @@ def run_combined_interactions_matrix(
     num_requests: int = 4,
     n_trials: int = 30,
     warmup_trials: int = 5,
-    device: str = "cpu",
+    device: Optional[str] = None,
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
 ) -> List[ExperimentResult]:
     """Executes the full 8-configuration combinatorial optimization interaction matrix."""
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     generator = WorkloadGenerator(tokenizer_name_or_path=model_name)
     workload = generator.generate_shared_prefix_workload(
         num_requests=num_requests,
@@ -177,10 +180,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--n-trials", type=int, default=None)
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
     warmups = 1 if args.quick else 5
+    target_device = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"Executing Combinatorial Optimization Interaction Matrix Experiment (N={trials} trials)...")
-    results = run_combined_interactions_matrix(n_trials=trials, warmup_trials=warmups, device="cpu")
+    print(f"Executing Combinatorial Optimization Interaction Matrix Experiment (N={trials} trials, device={target_device})...")
+    results = run_combined_interactions_matrix(n_trials=trials, warmup_trials=warmups, device=target_device)
     print(f"Interaction matrix complete! Total experiments recorded: {len(results)}")

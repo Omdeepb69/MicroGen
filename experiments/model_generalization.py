@@ -119,11 +119,14 @@ def run_model_generalization_experiment(
     num_requests: int = 4,
     n_trials: int = 30,
     warmup_trials: int = 5,
-    device: str = "cpu",
+    device: Optional[str] = None,
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
 ) -> List[ExperimentResult]:
     """Executes model architecture generalization evaluation across popular models."""
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     if models is None:
         models = ["sshleifer/tiny-gpt2"]
 
@@ -176,10 +179,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--n-trials", type=int, default=None)
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
     warmups = 1 if args.quick else 5
+    target_device = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"Executing Popular Architecture Generalization Experiment (N={trials} trials)...")
-    results = run_model_generalization_experiment(n_trials=trials, warmup_trials=warmups, device="cpu")
+    print(f"Executing Popular Architecture Generalization Experiment (N={trials} trials, device={target_device})...")
+    results = run_model_generalization_experiment(n_trials=trials, warmup_trials=warmups, device=target_device)
     print(f"Generalization experiment complete! Total experiments recorded: {len(results)}")

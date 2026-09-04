@@ -136,14 +136,17 @@ def run_speculative_sweep(
     draft_model_name: str = "sshleifer/tiny-gpt2",
     target_model_name: str = "sshleifer/tiny-gpt2",
     draft_lengths: Optional[List[int]] = None,
-    num_requests: int = 3,
+    num_requests: int = 4,
     n_trials: int = 30,
     warmup_trials: int = 5,
-    device: str = "cpu",
+    device: Optional[str] = None,
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
 ) -> List[ExperimentResult]:
     """Executes draft length K sweep comparing target-only baseline against speculative decoding."""
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     if draft_lengths is None:
         draft_lengths = [1, 2, 3, 4, 5]
 
@@ -199,10 +202,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--n-trials", type=int, default=None)
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
     warmups = 1 if args.quick else 5
+    target_device = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"Executing Speculative Decoding Acceptance & Speedup Sweep (N={trials} trials)...")
-    results = run_speculative_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
+    print(f"Executing Speculative Decoding Acceptance & Speedup Sweep (N={trials} trials, device={target_device})...")
+    results = run_speculative_sweep(n_trials=trials, warmup_trials=warmups, device=target_device)
     print(f"Speculative sweep complete! Total experiments recorded: {len(results)}")

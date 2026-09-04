@@ -212,11 +212,14 @@ def run_prefix_sharing_sweep(
     num_requests: int = 5,
     n_trials: int = 30,
     warmup_trials: int = 5,
-    device: str = "cpu",
+    device: Optional[str] = None,
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
 ) -> List[ExperimentResult]:
     """Executes shared-prefix ratio sweep comparing uncached vs prefix-cached runs."""
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     if prefix_ratios is None:
         prefix_ratios = [0.0, 0.25, 0.50, 0.75, 0.90, 1.00]
 
@@ -281,10 +284,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--n-trials", type=int, default=None)
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
     warmups = 1 if args.quick else 5
+    target_device = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"Executing Shared-Prefix Ratio Sweep (N={trials} trials)...")
-    results = run_prefix_sharing_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
+    print(f"Executing Shared-Prefix Ratio Sweep (N={trials} trials, device={target_device})...")
+    results = run_prefix_sharing_sweep(n_trials=trials, warmup_trials=warmups, device=target_device)
     print(f"Sweep complete! Total experiments recorded: {len(results)}")

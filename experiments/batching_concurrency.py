@@ -146,11 +146,14 @@ def run_batching_concurrency_sweep(
     num_requests: int = 8,
     n_trials: int = 30,
     warmup_trials: int = 5,
-    device: str = "cpu",
+    device: Optional[str] = None,
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
 ) -> List[ExperimentResult]:
     """Executes static vs continuous batching concurrency sweep across batch sizes B."""
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     if batch_sizes is None:
         batch_sizes = [1, 2, 4, 8, 16]
 
@@ -200,10 +203,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--n-trials", type=int, default=None)
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
     warmups = 1 if args.quick else 5
+    target_device = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"Executing Static vs Continuous Batching Concurrency Sweep (N={trials} trials)...")
-    results = run_batching_concurrency_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
+    print(f"Executing Static vs Continuous Batching Concurrency Sweep (N={trials} trials, device={target_device})...")
+    results = run_batching_concurrency_sweep(n_trials=trials, warmup_trials=warmups, device=target_device)
     print(f"Batching concurrency sweep complete! Total experiments recorded: {len(results)}")
