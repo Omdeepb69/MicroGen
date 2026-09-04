@@ -34,6 +34,12 @@ def run_suite(quick: bool = False) -> None:
 
     flag = ["--quick"] if quick else []
 
+    # Configure PYTHONPATH to include current root directory
+    env = os.environ.copy()
+    cwd = os.getcwd()
+    existing_ppath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{cwd}:{existing_ppath}" if existing_ppath else cwd
+
     for script in EXPERIMENT_SCRIPTS:
         if not os.path.exists(script):
             print(f"[!] Warning: Script missing: {script}", file=sys.stderr)
@@ -41,7 +47,7 @@ def run_suite(quick: bool = False) -> None:
 
         print(f"\n---> Executing experiment module: {script} {' '.join(flag)}")
         cmd = [sys.executable, script] + flag
-        res = subprocess.run(cmd)
+        res = subprocess.run(cmd, env=env)
         if res.returncode != 0:
             print(f"[!] Error running {script} (exit code: {res.returncode})", file=sys.stderr)
         else:
@@ -52,8 +58,8 @@ def run_suite(quick: bool = False) -> None:
     print("================================================================================")
     
     # Run exporter scripts
-    subprocess.run([sys.executable, "scripts/export_paper_tables.py"], check=True)
-    subprocess.run([sys.executable, "scripts/generate_paper_figures.py"], check=True)
+    subprocess.run([sys.executable, "scripts/export_paper_tables.py"], check=True, env=env)
+    subprocess.run([sys.executable, "scripts/generate_paper_figures.py"], check=True, env=env)
     
     print("\n[🎉] Complete empirical experiment suite execution successful!")
 
