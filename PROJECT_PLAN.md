@@ -52,7 +52,7 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ### Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Track Scaling)
 - [x] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
-- [ ] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
+- [x] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
 - [ ] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
 - [ ] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
 
@@ -60,24 +60,29 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ## Current Task
 
-### Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2)
-- **Objective**: Execute 1-GPU vs 2-GPU tensor-parallel benchmark sweeps using `ParallelBackend` (`microgen/backends/parallel.py`) on dual NVIDIA Tesla T4 GPUs, measuring prefill TTFT scaling, decode throughput, and VRAM distribution across ranks.
-- **Depends on**: Task 23.1.1.
-- **Scope**: `experiments/tensor_parallel_scaling.py`, `scripts/kaggle_benchmark_runner.py`, `tests/experiments/test_tensor_parallel_scaling.py`.
-- **Constraints**:
-  - Support single-machine multi-rank PyTorch CUDA execution without requiring external MPI setup.
-  - Fail loudly if multi-GPU tensor communication or rank tensor splitting fails.
-- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_tensor_parallel_scaling.py` passes on CPU/CUDA, and raw $N=30$ trial metrics are logged to `results/raw/experiments.jsonl`.
+### Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing)
+- **Objective**: Execute core micro-ablation sweeps (Baseline FP32, INT8 Quantization, Paged KV, Prefix Caching r=100%, Speculative Decoding) on NVIDIA P100 (Pascal architecture, FP32/FP16 without Tensor Cores) to compare against T4 (Turing architecture with Tensor Cores), logging hardware metadata and compute capabilities to `results/raw/experiments.jsonl`.
+- **Depends on**: Task 23.1.2.
+- **Scope**: `experiments/hardware_duality.py`, `scripts/run_all_paper_experiments.py`, `tests/experiments/test_hardware_duality.py`.
+- **Constraints**: Log explicit device metadata (`device_name`, `cuda_compute_capability`, `arch_generation`) in JSONL trial records.
+- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_hardware_duality.py` passes on CPU/CUDA, and raw $N=30$ trial metrics are logged to `results/raw/experiments.jsonl`.
+
 
 
 ---
 
 ## Log
 
+### 2026-09-04 — Task 23.1.2 completed
+- Changed: Implemented `experiments/tensor_parallel_scaling.py` and `tests/experiments/test_tensor_parallel_scaling.py` to benchmark 1-rank vs 2-rank `TensorParallelPyTorchBackend` execution. Integrated `experiments/tensor_parallel_scaling.py` into `scripts/run_all_paper_experiments.py`.
+- Files: `experiments/tensor_parallel_scaling.py`, `tests/experiments/test_tensor_parallel_scaling.py`, `scripts/run_all_paper_experiments.py`, `PROJECT_PLAN.md`.
+- Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_tensor_parallel_scaling.py` passed 3/3 tests cleanly.
+
 ### 2026-09-04 — Task 23.1.1 completed
 - Changed: Enabled modern open-weights architecture family support (`Qwen/Qwen2.5-0.5B`, `meta-llama/Llama-3.2-1B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`) with `trust_remote_code=True` across `PyTorchBackend`, `QuantizedPyTorchBackend`, `WorkloadGenerator`, and `experiments/model_generalization.py`. Added multi-architecture unit tests.
 - Files: `microgen/backends/pytorch.py`, `microgen/backends/quantized.py`, `benchmarks/workloads.py`, `experiments/model_generalization.py`, `tests/experiments/test_model_generalization.py`, `pytest.ini`, `PROJECT_PLAN.md`.
 - Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_model_generalization.py` passed 4/4 test cases cleanly.
+
 
 ### 2026-09-04 — Phase 22 complete & Phase 23 planned
 - Changed: Finalized Phase 22 editorial, statistical, and manuscript consistency pass. Formulated Phase 23 plan for multi-architecture model expansion (Qwen2.5 & Llama-3.2), multi-GPU tensor parallelism (`ParallelBackend` on T4x2), and cross-generation hardware duality (P100 vs T4).

@@ -13,6 +13,7 @@ EXPERIMENT_SCRIPTS = [
     "experiments/batching_concurrency.py",
     "experiments/speculative_sweep.py",
     "experiments/hardware_duality.py",
+    "experiments/tensor_parallel_scaling.py",
     "experiments/model_generalization.py",
     "experiments/paged_memory_pressure.py",
     "experiments/combined_interactions.py",
