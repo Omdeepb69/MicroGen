@@ -22,7 +22,13 @@ EXPERIMENT_SCRIPTS = [
 
 def pre_download_models() -> None:
     """Pre-downloads required models into local HF cache and enables offline mode to avoid HF API 429 rate limits."""
-    models = ["sshleifer/tiny-gpt2"]
+    models = [
+        "sshleifer/tiny-gpt2",
+        "gpt2",
+        "Qwen/Qwen2.5-0.5B",
+        "meta-llama/Llama-3.2-1B",
+        "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    ]
     
     # Retrieve Kaggle secret HF_TOKEN_READ if available
     try:
@@ -38,8 +44,8 @@ def pre_download_models() -> None:
     from transformers import AutoTokenizer, AutoModelForCausalLM
     for m in models:
         try:
-            AutoTokenizer.from_pretrained(m)
-            AutoModelForCausalLM.from_pretrained(m)
+            AutoTokenizer.from_pretrained(m, trust_remote_code=True)
+            AutoModelForCausalLM.from_pretrained(m, trust_remote_code=True)
             print(f"  - Downloaded and cached: {m}")
         except Exception as e:
             print(f"  - Warning pre-downloading {m}: {e}")
