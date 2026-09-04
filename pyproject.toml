@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "microgen-llm"
-version = "1.0.1"
+version = "1.0.2"
 description = "Lightweight, modular, hardware-aware LLM inference engine & empirical research testbed."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -43,7 +43,9 @@ dependencies = [
     "uvicorn>=0.20.0",
     "pydantic>=2.0.0",
     "click>=8.0.0",
-    "httpx>=0.24.0"
+    "httpx>=0.24.0",
+    "rich>=12.0.0",
+    "sse-starlette>=1.6.0"
 ]
 
 [project.optional-dependencies]
