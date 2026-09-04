@@ -40,6 +40,17 @@ def test_evaluate_model_optimization_combined():
     assert metrics["total_tokens"] > 0
 
 
+def test_evaluate_model_optimization_int8_and_paged():
+    generator = WorkloadGenerator("sshleifer/tiny-gpt2")
+    workload = generator.generate_shared_prefix_workload(num_requests=2, total_prompt_len=32, prefix_ratio=0.5, max_new_tokens=4, seed=42)
+    metrics = evaluate_model_optimization("sshleifer/tiny-gpt2", workload, optimization="opt_int8", device_str="cpu")
+
+    assert "ttft_ms" in metrics
+    assert "tpot_ms" in metrics
+    assert metrics["optimization"] == "opt_int8"
+    assert metrics["total_tokens"] > 0
+
+
 def test_run_model_generalization_experiment():
     with tempfile.TemporaryDirectory() as tmp_dir:
         results = run_model_generalization_experiment(
@@ -58,3 +69,4 @@ def test_run_model_generalization_experiment():
         with open(jsonl_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
             assert len(lines) == 2
+

@@ -68,7 +68,10 @@ class WorkloadGenerator:
     @property
     def tokenizer(self) -> PreTrainedTokenizerBase:
         if self._tokenizer is None:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                self.tokenizer_name,
+                trust_remote_code=True,
+            )
             if self._tokenizer.pad_token is None:
                 self._tokenizer.pad_token = self._tokenizer.eos_token
         return self._tokenizer

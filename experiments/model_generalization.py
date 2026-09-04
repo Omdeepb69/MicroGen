@@ -129,7 +129,13 @@ def run_model_generalization_experiment(
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if models is None:
-        models = ["sshleifer/tiny-gpt2", "gpt2"]
+        models = [
+            "sshleifer/tiny-gpt2",
+            "gpt2",
+            "Qwen/Qwen2.5-0.5B",
+            "meta-llama/Llama-3.2-1B",
+            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        ]
 
     if optimizations is None:
         optimizations = ["baseline_fp32", "opt_int8", "opt_paged", "opt_prefix", "opt_all_combined"]

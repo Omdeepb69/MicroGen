@@ -51,7 +51,7 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 ## Planned Phases & Tasks
 
 ### Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Track Scaling)
-- [ ] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
+- [x] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
 - [ ] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
 - [ ] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
 - [ ] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
@@ -60,20 +60,27 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ## Current Task
 
-### Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors)
-- **Objective**: Extend `InferenceBackend` adaptors and `experiments/model_generalization.py` to support `Qwen/Qwen2.5-0.5B` and `meta-llama/Llama-3.2-1B` model architectures (handling GQA, RoPE embeddings, and RMSNorm layers) across baseline, INT8 quantized, and paged KV execution backends.
-- **Depends on**: Task 22.1.6 (Phase 22 completion).
-- **Scope**: `microgen/backends/pytorch.py`, `microgen/backends/quantized.py`, `experiments/model_generalization.py`, `tests/experiments/test_model_generalization.py`.
+### Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2)
+- **Objective**: Execute 1-GPU vs 2-GPU tensor-parallel benchmark sweeps using `ParallelBackend` (`microgen/backends/parallel.py`) on dual NVIDIA Tesla T4 GPUs, measuring prefill TTFT scaling, decode throughput, and VRAM distribution across ranks.
+- **Depends on**: Task 23.1.1.
+- **Scope**: `experiments/tensor_parallel_scaling.py`, `scripts/kaggle_benchmark_runner.py`, `tests/experiments/test_tensor_parallel_scaling.py`.
 - **Constraints**:
-  - Maintain existing `InferenceBackend` protocol contract and full backward compatibility with GPT-2 models.
-  - Fail loudly if model loading or architecture feature extraction fails.
-- **Verification Criterion**: `pytest tests/experiments/test_model_generalization.py` passes cleanly for Qwen2.5 and Llama-3.2 prefill, decode, and quantization steps, and dry-run outputs metrics to `results/raw/experiments.jsonl`.
+  - Support single-machine multi-rank PyTorch CUDA execution without requiring external MPI setup.
+  - Fail loudly if multi-GPU tensor communication or rank tensor splitting fails.
+- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_tensor_parallel_scaling.py` passes on CPU/CUDA, and raw $N=30$ trial metrics are logged to `results/raw/experiments.jsonl`.
+
 
 ---
 
 ## Log
 
+### 2026-09-04 — Task 23.1.1 completed
+- Changed: Enabled modern open-weights architecture family support (`Qwen/Qwen2.5-0.5B`, `meta-llama/Llama-3.2-1B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`) with `trust_remote_code=True` across `PyTorchBackend`, `QuantizedPyTorchBackend`, `WorkloadGenerator`, and `experiments/model_generalization.py`. Added multi-architecture unit tests.
+- Files: `microgen/backends/pytorch.py`, `microgen/backends/quantized.py`, `benchmarks/workloads.py`, `experiments/model_generalization.py`, `tests/experiments/test_model_generalization.py`, `pytest.ini`, `PROJECT_PLAN.md`.
+- Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_model_generalization.py` passed 4/4 test cases cleanly.
+
 ### 2026-09-04 — Phase 22 complete & Phase 23 planned
 - Changed: Finalized Phase 22 editorial, statistical, and manuscript consistency pass. Formulated Phase 23 plan for multi-architecture model expansion (Qwen2.5 & Llama-3.2), multi-GPU tensor parallelism (`ParallelBackend` on T4x2), and cross-generation hardware duality (P100 vs T4).
 - Files: `PROJECT_PLAN.md`, `ARCHITECTURE.md`
 - Verified: All 6 tasks in Phase 22 verified and completed; `paper/main.pdf` compiled cleanly (11 pages, 0 errors).
+

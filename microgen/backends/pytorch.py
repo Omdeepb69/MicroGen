@@ -79,9 +79,10 @@ class PyTorchBackend(InferenceBackend):
         if model_instance is not None:
             self._model = model_instance.to(self._device.torch_device)
         else:
-            self._model = AutoModelForCausalLM.from_pretrained(model_name_or_path).to(
-                self._device.torch_device
-            )
+            self._model = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path,
+                trust_remote_code=True,
+            ).to(self._device.torch_device)
 
         self._model.eval()
         self._model_name = model_name_or_path
