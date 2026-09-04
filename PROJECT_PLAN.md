@@ -45,22 +45,28 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 - [x] Phase 21 — Academic Paper Hardening, Claim Precision & Empirical Realism Alignment
 - [x] Phase 22 — Research Rigor, Empirical Audit & Manuscript Hardening
 - [x] Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Track Scaling)
+- [ ] Phase 24 — Packaging, Developer Experience (DX) & PyPI Distribution Engine
 
 ---
 
 ## Planned Phases & Tasks
 
-### Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Track Scaling)
-- [x] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
-- [x] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
-- [x] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
-- [x] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
+### Phase 24 — Packaging, Developer Experience (DX) & PyPI Distribution Engine
+- [ ] Task 24.1.1: Standard Python Packaging & Build Config (`pyproject.toml`, `setup.py`, entry points, extras) (`pyproject.toml`, `microgen/__init__.py`)
+- [ ] Task 24.1.2: High-Level Fluent Developer API (`microgen.LLMEngine` high-level wrapper for 1-liner inference, quantization & TP) (`microgen/sdk/engine.py`, `microgen/__init__.py`)
+- [ ] Task 24.1.3: Enhanced Rich CLI & Interactive Terminal Chat (`microgen chat`, `microgen serve`, `microgen benchmark`) (`microgen/cli/`)
+- [ ] Task 24.1.4: PyPI Release Packaging Verification & E2E Installation Test (`tests/test_packaging.py`, package build verification)
 
 ---
 
 ## Current Task
 
-All planned tasks in Phase 23 are complete. Ready for final project review or submission artifact packaging.
+### Task 24.1.1: Standard Python Packaging & Build Config (`pyproject.toml`, `setup.py`, entry points, extras)
+- **Objective**: Configure modern `pyproject.toml` metadata, versioning, dependencies, CLI entry points (`microgen = microgen.cli.main:main`), and optional extras (`[api]`, `[gpu]`, `[benchmark]`).
+- **Dependencies**: Phase 23
+- **Scope**: Create `pyproject.toml`, configure `microgen/__init__.py` version `1.0.0`, ensure clean build using `build` / `flit` / `setuptools`.
+- **Constraints**: Follow `AGENTS.md` rules; preserve existing package imports and backward compatibility.
+- **Verification Criterion**: Running `python -m build` produces valid sdist (`.tar.gz`) and wheel (`.whl`) packages, and `pip install -e .` installs the CLI binary cleanly.
 
 ---
 

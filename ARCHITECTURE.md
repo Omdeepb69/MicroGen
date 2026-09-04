@@ -98,3 +98,6 @@ All empirical benchmark experiment modules (`benchmarks/harness.py`, `experiment
 ### 2026-09-04 — Multi-Architecture & Multi-GPU Empirical Expansion (Phase 23)
 Decoupled architecture-specific execution logic (RoPE rotary embeddings, GQA head repetition, RMSNorm) behind standard `InferenceBackend` protocol adaptors to seamlessly evaluate modern open-weights model families (`Qwen/Qwen2.5-0.5B`, `meta-llama/Llama-3.2-1B`) alongside GPT-2. Hardware duality benchmarks explicitly record compute capabilities and architecture generation metadata (NVIDIA P100 Pascal vs Tesla T4 Turing). Tensor parallelism evaluation leverages `ParallelBackend` sharding across dual Tesla T4 GPUs.
 
+### 2026-09-04 — PyPI Package & High-Level Developer Experience (Phase 24)
+Standardized package distribution via `pyproject.toml` exposing high-level `microgen.LLMEngine` wrapper API. `LLMEngine` encapsulates `InferenceBackend`, `PagedKVCacheManager`, `PrefixCacheManager`, and `Scheduler` into a simple 1-line Python interface (`engine = microgen.LLMEngine.from_pretrained(...)`), while preserving low-level protocol access for advanced systems researchers.
+
