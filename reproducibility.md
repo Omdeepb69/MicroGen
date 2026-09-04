@@ -1,23 +1,13 @@
-# MicroGen Empirical Research & Reproducibility Package (v2)
+# MicroGen Benchmark Reproducibility Package
 
-**Paper Title**: *MicroGen: An Empirical Study of When LLM Inference Optimizations Help—and When They Hurt*
+This artifact documents the environment specification, execution commands, and parameters required to replicate all empirical benchmark results presented in the paper.
 
-This package documents the environment specification, execution manifests, correctness validation gates, and 100% data-driven pipeline required to replicate all empirical benchmark findings presented in the paper.
+## 1. System Requirements & Environment
 
----
-
-## 1. Core Principles & Provenance
-
-1. **Zero Hardcoded Figures/Tables**: `scripts/export_paper_tables.py` and `scripts/generate_paper_figures.py` read 100% dynamically from raw JSON/JSONL artifacts (`results/raw/experiments.jsonl`). Synthetic/mock fallbacks are strictly disabled.
-2. **Correctness First**: Before any benchmark pass, all backends must pass token-by-token greedy output identity checks and logit cosine similarity gates (`benchmarks/correctness.py`).
-3. **Statistical Protocol**: $W=5$ warmup passes, $N=30$ independent repetitions per configuration, $M \ge 100$ request observations for tail latency estimation.
-4. **Full Provenance Chain**: Every raw trial record logs:
-   - `experiment_id` & `git_commit` hash
-   - `wall_clock_timestamp` (ISO 8601)
-   - `hardware_name`, `cuda_version`, `pytorch_version`, `python_version`
-   - `seed` & `trial_number`
-
----
+- **Python Version**: `3.11+`
+- **PyTorch**: `2.0+` with CUDA support
+- **Transformers**: `4.30+`
+- **Hardware Recommended**: NVIDIA GPU (T4, P100, L4, A10G, or V100) with at least 15 GB VRAM. CPU-only execution is supported for functional verification.
 
 ## 2. Environment Setup
 
@@ -28,48 +18,54 @@ pip install -r requirements.txt
 export PYTHONPATH=.
 ```
 
----
+## 3. Running Paper Benchmark Sweeps
 
-## 3. Correctness Validation
-
-Before executing benchmark sweeps, run the correctness gate suite:
+Run individual modular experiment scripts to populate `results/raw/experiments.jsonl`:
 
 ```bash
-python -m benchmarks.correctness
-```
-
----
-
-## 4. Manifest-Driven Benchmark Execution
-
-All experiment parameters are governed by manifests in `experiments/manifests/`:
-
-```bash
-# Correctness verification
-python -m benchmarks.correctness
-
-# Modular experiment sweeps
+# Phase 15: Micro-Ablations (RQ1 & RQ2)
 python experiments/context_sweep.py
 python experiments/prefix_sharing.py
 python experiments/quant_lifecycle.py
 python experiments/speculative_sweep.py
+
+# Phase 16: Concurrency & Memory Pressure (RQ3)
 python experiments/batching_concurrency.py
 python experiments/paged_memory_pressure.py
+python experiments/combined_interactions.py
 
-# Full Kaggle GPU Suite
+# Phase 17: Generalization (RQ4)
+python experiments/model_generalization.py
+python experiments/hardware_duality.py
+
+# Full Kaggle GPU Automated Execution Suite
 python scripts/kaggle_benchmark_runner.py
 ```
 
----
+## 4. Synthesizing Figures and Tables
 
-## 5. Data-Driven Synthesis
-
-To synthesize publication figures and LaTeX tables directly from empirical logs:
+To generate publication vector figures and LaTeX tables from benchmark trial outputs:
 
 ```bash
-# Export LaTeX tables (paper/tables/*.tex)
-python scripts/export_paper_tables.py
-
-# Generate vector figures (paper/figures/*.pdf, *.png)
+# Generate vector figures in paper/figures/*.png and *.pdf
 python scripts/generate_paper_figures.py
+
+# Generate LaTeX tables in paper/tables/*.tex
+python scripts/export_paper_tables.py
+```
+
+## 5. Artifact Directory Layout
+
+```
+paper/
+├── figures/
+│   ├── fig1_context_scaling.pdf
+│   ├── fig2_prefix_sharing_ttft.pdf
+│   ├── fig3_quant_memory_pareto.pdf
+│   ├── fig4_batching_concurrency.pdf
+│   └── fig5_optimization_regime_map.pdf
+└── tables/
+    ├── table1_main_results.tex
+    ├── table2_concurrency_scaling.tex
+    └── table3_memory_ablation.tex
 ```

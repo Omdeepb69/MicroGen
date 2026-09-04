@@ -113,6 +113,9 @@ def update_requests_with_sampled_tokens(
         if req.is_finished:
             continue
 
+        if req.first_token_time is None:
+            req.first_token_time = current_time
+
         req.generated_token_ids.append(token_id)
 
         is_eos = eos_token_id is not None and token_id == eos_token_id

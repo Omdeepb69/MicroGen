@@ -32,6 +32,7 @@ class Request:
     status: RequestStatus = RequestStatus.PENDING
     arrival_time: float = field(default_factory=time.perf_counter)
     start_time: Optional[float] = None
+    first_token_time: Optional[float] = None
     finish_time: Optional[float] = None
     generated_token_ids: List[int] = field(default_factory=list)
     generated_text: str = ""
@@ -45,6 +46,36 @@ class Request:
             RequestStatus.CANCELLED,
             RequestStatus.FAILED,
         )
+
+    @property
+    def ttft_ms(self) -> float:
+        """Time To First Token in milliseconds (first_token_time - arrival_time)."""
+        end_t = self.first_token_time if self.first_token_time is not None else self.start_time
+        if end_t is not None and self.arrival_time is not None:
+            return max(0.0, (end_t - self.arrival_time) * 1000.0)
+        return 0.0
+
+    @property
+    def tpot_ms(self) -> float:
+        """Time Per Output Token in milliseconds."""
+        start_t = self.first_token_time if self.first_token_time is not None else self.start_time
+        if (
+            self.finish_time is not None
+            and start_t is not None
+            and self.num_generated_tokens > 1
+        ):
+            return max(
+                0.0,
+                ((self.finish_time - start_t) * 1000.0) / (self.num_generated_tokens - 1),
+            )
+        return 0.0
+
+    @property
+    def total_latency_ms(self) -> float:
+        """Total Request Latency in milliseconds (finish_time - arrival_time)."""
+        if self.finish_time is not None and self.arrival_time is not None:
+            return max(0.0, (self.finish_time - self.arrival_time) * 1000.0)
+        return 0.0
 
     @property
     def num_prompt_tokens(self) -> int:
