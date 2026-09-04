@@ -53,7 +53,7 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ### Phase 24 — Packaging, Developer Experience (DX) & PyPI Distribution Engine
 - [x] Task 24.1.1: Standard Python Packaging & Build Config (`pyproject.toml`, entry points, extras) (`pyproject.toml`, `microgen/__init__.py`)
-- [ ] Task 24.1.2: High-Level Fluent SDK Wrapper (`microgen.LLMEngine` factory with backend dispatch validation) (`microgen/sdk/`, `microgen/__init__.py`)
+- [x] Task 24.1.2: High-Level Fluent SDK Wrapper (`microgen.LLMEngine` factory with backend dispatch validation) (`microgen/sdk/`, `microgen/__init__.py`)
 - [ ] Task 24.1.3: Module Namespace Re-Exports (`microgen.memory`, `microgen.backends`, `microgen.caching`, `microgen.scheduler`, `microgen.engine`, `microgen.profiling`, `microgen.benchmarks`) (`microgen/__init__.py`)
 - [ ] Task 24.1.4: Enhanced Rich CLI Suite & Terminal Chat (`microgen chat`, `microgen serve`, `microgen benchmark`) (`microgen/cli/`)
 - [ ] Task 24.1.5: PyPI Release Packaging Verification & E2E Installation Test (`tests/test_packaging.py`, wheel build verification)
@@ -62,16 +62,23 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ## Current Task
 
-### Task 24.1.2: High-Level Fluent SDK Wrapper (`microgen.LLMEngine` factory with backend dispatch validation)
-- **Objective**: Implement `microgen/sdk/engine.py` exposing `LLMEngine.from_pretrained(model_name, quantize, tensor_parallel_size, device)` factory with backend validation and high-level `.generate(prompt, max_new_tokens, stream=True)` methods.
-- **Dependencies**: Task 24.1.1
-- **Scope**: Create `microgen/sdk/engine.py` and `microgen/sdk/__init__.py`, adding backend dispatch logic and validation for incompatible parameter combinations (e.g., erroring if `quantize="int8"` and `tensor_parallel_size > 1` are requested simultaneously). Add unit tests in `tests/test_sdk.py`.
-- **Constraints**: Follow `AGENTS.md` rules; do not alter existing low-level backend implementations.
-- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/test_sdk.py` passes 100% cleanly.
+### Task 24.1.3: Module Namespace Re-Exports (`microgen.memory`, `microgen.backends`, `microgen.caching`, `microgen.scheduler`, `microgen.engine`, `microgen.profiling`, `microgen.benchmarks`)
+- **Objective**: Expose clean top-level submodules in `microgen/__init__.py` and dedicated package namespaces so developers and researchers can cleanly access all low-level MicroGen memory allocators, backends, schedulers, and profilers.
+- **Dependencies**: Task 24.1.2
+- **Scope**: Update `microgen/__init__.py` and create clean package re-exports for `microgen.memory`, `microgen.backends`, `microgen.caching`, `microgen.scheduler`, `microgen.engine`, `microgen.profiling`, and `microgen.benchmarks`. Add tests in `tests/test_namespace.py`.
+- **Constraints**: Follow `AGENTS.md` rules; do not break any existing low-level or relative import paths.
+- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/test_namespace.py` passes 100% cleanly.
 
 ---
 
 ## Log
+
+### 2026-09-04 — Task 24.1.2 completed
+- Changed: Implemented `microgen/sdk/engine.py` exposing `LLMEngine.from_pretrained()` factory with backend dispatch (PyTorch, Quantized INT8, TensorParallel TP>1), validation against unsupported combos (INT8+TP conflict error), and stream/full generation methods. Created `microgen/sdk/__init__.py` and unit test suite `tests/test_sdk.py`.
+- Files: `microgen/sdk/engine.py`, `microgen/sdk/__init__.py`, `tests/test_sdk.py`, `PROJECT_PLAN.md`.
+- Verified: All 9 unit tests in `tests/test_sdk.py` passed 100% cleanly, and full test suite (29 tests) passed without regressions.
+
+---
 
 ### 2026-09-04 — Task 24.1.1 completed
 - Changed: Created `pyproject.toml` with setuptools build backend, package metadata, optional dependencies (`[api]`, `[gpu]`, `[benchmark]`, `[dev]`), and CLI entry point `microgen = microgen.cli.main:main`. Set `microgen.__version__ = "1.0.0"`.
