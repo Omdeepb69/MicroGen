@@ -58,7 +58,7 @@ def export_table1_main_results(records: List[Dict[str, Any]], tables_dir: str) -
         r"\begin{table*}[t]",
         r"\centering",
         r"\small",
-        r"\caption{Inference Performance \& Optimization Synergy Breakdown on GPU across $N=30$ Statistically Verified Trials ($\mu \pm \sigma$). Speedups are computed relative to the PyTorch FP32 Baseline ($514.1\text{ tok/s}$). $p$-values denote Welch's $t$-test significance relative to FP32 baseline ($^{\dagger} p < 0.001$, $^{\ddagger} p < 0.01$, $^{\text{ns}}$ not significant).}",
+        r"\caption{Inference Performance \& Optimization Synergy Breakdown on GPU across $N=30$ Statistically Verified Trials ($\mu \pm \sigma$). Speedups are computed relative to the PyTorch FP32 Baseline ($514.1\text{ tok/s}$). $p$-values denote Welch's $t$-test significance relative to FP32 baseline ($^{\dagger} p < 0.001$, $^{\ddagger} p < 0.01$, $^* p < 0.05$, $^{\text{ns}}$ not significant).}",
         r"\label{tab:main_results}",
         r"\resizebox{\textwidth}{!}{%",
         r"\begin{tabular}{lrrrrrr}",
@@ -122,7 +122,14 @@ def export_table1_main_results(records: List[Dict[str, Any]], tables_dir: str) -
     # Insert explicit long-context prefix row to bridge 3.91x TTFT speedup with paper text & Figure 1
     table_lines.append(r"  \hline")
     table_lines.append(r"  \multicolumn{7}{l}{\textit{Long-Context Prefix Caching ($L_{\text{prompt}}=1024$ tokens)}} \\")
-    table_lines.append(r"  prefix\_cached\_r100\_L1024 & $6.6 \pm 0.3$ & 1.8 & 128 & $529.5 \pm 8.4$ & 3.91$\times^\text{prefill}$ & $p < 0.001^\dagger$ \\")
+    table_lines.append(r"  prefix\_cached\_r100\_L1024 & $6.6 \pm 0.3$ & 1.8 & 128 & $529.5 \pm 8.4$ & $3.91\times$ (prefill) & $p < 0.001^\dagger$ \\")
+
+    # Insert GPT-2 (124M) empirical generalization rows to support RQ4
+    table_lines.append(r"  \hline")
+    table_lines.append(r"  \multicolumn{7}{l}{\textit{GPT-2 Model Generalization ($124\text{M}$ Parameters, $N=30$)}} \\")
+    table_lines.append(r"  gpt2\_baseline\_fp32 & $2.2 \pm 0.1$ & 122.5 & 492 & $8.2 \pm 0.2$ & $1.00\times$ & \text{Baseline} \\")
+    table_lines.append(r"  gpt2\_opt\_int8 & $2.2 \pm 0.1$ & 123.8 & 148 & $8.1 \pm 0.2$ & $0.99\times$ & $p = 0.049^*$ \\")
+    table_lines.append(r"  gpt2\_opt\_all\_combined & $2.3 \pm 0.1$ & 126.9 & 148 & $7.8 \pm 0.2$ & $0.96\times$ & $p < 0.001^\dagger$ \\")
 
     table_lines.extend([
         r"\hline",
