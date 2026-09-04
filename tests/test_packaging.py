@@ -24,7 +24,7 @@ def test_pyproject_toml_exists_and_valid():
     assert pyproject_path.exists(), "pyproject.toml does not exist in root directory"
 
     content = pyproject_path.read_text()
-    assert 'name = "microgen"' in content
+    assert 'name = "microgen-llm"' in content
     assert 'version = "1.0.0"' in content
     assert 'microgen = "microgen.cli.main:main"' in content
 
