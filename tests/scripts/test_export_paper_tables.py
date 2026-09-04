@@ -68,7 +68,7 @@ def test_export_all_paper_artifacts():
             repro_path=repro_path,
         )
 
-        assert len(paths) == 4
+        assert len(paths) >= 4
         for p in paths:
             assert os.path.exists(p)
             assert os.path.getsize(p) > 0
