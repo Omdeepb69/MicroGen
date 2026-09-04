@@ -24,7 +24,7 @@ def evaluate_model_optimization(
     model_name: str,
     workload: WorkloadSuite,
     optimization: str = "baseline_fp32",
-    device_str: str = "cpu",
+    device_str: str = "cuda",
     backend: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Evaluates a single model under a specified optimization configuration."""
@@ -129,7 +129,7 @@ def run_model_generalization_experiment(
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if models is None:
-        models = ["sshleifer/tiny-gpt2"]
+        models = ["sshleifer/tiny-gpt2", "gpt2"]
 
     if optimizations is None:
         optimizations = ["baseline_fp32", "opt_int8", "opt_paged", "opt_prefix", "opt_all_combined"]

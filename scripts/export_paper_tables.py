@@ -211,7 +211,7 @@ def export_table3_memory_ablation(records: List[Dict[str, Any]], tables_dir: str
         r"\begin{table}[htbp]",
         r"\centering",
         r"\small",
-        r"\caption{KV Cache Allocation Resilience under Constrained VRAM Capacity.}",
+        r"\caption{KV Cache Allocation Resilience under Constrained VRAM Capacity. Contiguous fragmentation is measured at peak allocation immediately prior to Out-of-Memory (OOM) sequence allocation failure.}",
         r"\label{tab:memory_ablation}",
         r"\resizebox{\columnwidth}{!}{%",
         r"\begin{tabular}{rrrrr}",

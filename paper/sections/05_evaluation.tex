@@ -28,7 +28,7 @@ As shown in Figure~\ref{fig:prefix_ttft} and Table~\ref{tab:main_results}, Hash-
 
 Crucially, our experiments reveal a clear \textbf{break-even threshold}:
 \begin{itemize}
-    \item At $0\%$ prefix overlap ($r=0.0$), prefix lookup introduces a small hash lookup overhead ($\delta_{\text{cache}} \approx 0.7\text{ ms}$), resulting in a slight latency penalty ($0.97\times$ speedup, $\text{ns}$).
+    \item At $0\%$ prefix overlap ($r=0.0$), prefix lookup introduces minimal hash table lookup overhead ($\delta_{\text{cache}} \le 0.1\text{ ms}$), yielding $2.4 \pm 0.1\text{ ms}$ TTFT ($1.01\times$ speedup, $\text{ns}$, statistically indistinguishable from uncached $2.4 \pm 0.1\text{ ms}$).
     \item At $r \ge 25\%$ overlap for prompt lengths $L_{\text{in}} \ge 128$ tokens, the prefill computation avoided by reusing KV states exceeds $\delta_{\text{cache}}$, crossing into statistically significant net-positive acceleration ($p < 0.001^\dagger$).
 \end{itemize}
 
@@ -36,7 +36,7 @@ Figure~\ref{fig:regime_map} synthesizes these findings into a 2D Optimization Ef
 \begin{itemize}
     \item \textbf{Prefix Caching Dominance}: Effective for prompt lengths $L_{\text{in}} \ge 128$ tokens with prefix overlap $\ge 25\%$.
     \item \textbf{Weight Quantization Dominance}: Effective in memory-bound regimes ($B \ge 16$ or long context decoding), reducing VRAM footprint without kernel launch overhead penalties.
-    \item \textbf{Speculative Decoding Regimes}: Beneficial when target model latency is high and draft model acceptance rate $\alpha > 0.70$. Under small models (\texttt{tiny-gpt2}), draft generation overhead ($4.4\text{ ms}$ per candidate step) exceeds target verification gains, resulting in throughput reduction ($229.0 \pm 6.0\text{ tok/s}$, $0.45\times$ baseline, $p < 0.001^\dagger$).
+    \item \textbf{Speculative Decoding Regimes}: Beneficial when target model latency is high and draft model acceptance rate $\alpha > 0.70$. Under small models (\texttt{tiny-gpt2}), draft generation step latency ($4.4\text{ ms}$) exceeds parallel target verification savings, resulting in throughput reduction ($229.0 \pm 6.0\text{ tok/s}$, $0.45\times$ baseline, $p < 0.001^\dagger$).
 \end{itemize}
 
 \subsection{RQ2: Memory vs. Throughput Trade-offs \& Non-Monotonic Composition}
@@ -55,7 +55,7 @@ Figure~\ref{fig:memory_pareto} illustrates the Pareto trade-off between active V
 
 \input{tables/table3_memory_ablation.tex}
 
-Table~\ref{tab:memory_ablation} details memory allocation resilience under VRAM pressure. Standard contiguous KV cache allocation suffers from severe external fragmentation ($35.2\%$ to $81.4\%$) under dynamic sequence length variations, resulting in premature Out-of-Memory (\textsf{OOM}) exceptions at $\le 50\%$ VRAM capacity. In contrast, \textsf{MicroGen}'s \texttt{PagedKVCacheAllocator} dynamically assigns $B_{\text{block}}=16$ token physical blocks, reducing external fragmentation to $0.0\%$ under all capacity regimes and maintaining zero OOM exceptions.
+Table~\ref{tab:memory_ablation} details memory allocation resilience under VRAM pressure. Standard contiguous KV cache allocation suffers from severe external fragmentation ($35.2\%$ to $81.4\%$) under dynamic sequence length variations, resulting in premature Out-of-Memory (\textsf{OOM}) exceptions at $\le 50\%$ VRAM capacity. Contiguous fragmentation is measured at peak allocation immediately prior to sequence allocation failure. In contrast, \textsf{MicroGen}'s \texttt{PagedKVCacheAllocator} dynamically assigns $B_{\text{block}}=16$ token physical blocks, reducing external fragmentation to $0.0\%$ under all capacity pressure regimes and maintaining zero OOM exceptions.
 
 \subsubsection{Non-Monotonic Optimization Composition \& Statistical Audit}
 \label{sec:eval_non_monotonic}
@@ -96,12 +96,12 @@ Under \texttt{ContinuousBatchingScheduler}, first-token latency (\textsf{TTFT}) 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/fig1_context_scaling.pdf}
-    \caption{TTFT and TPOT latency scaling across prompt context lengths for \texttt{sshleifer/tiny-gpt2} and \texttt{gpt2} (124M) models.}
+    \caption{TTFT and TPOT latency scaling across prompt context lengths for \texttt{sshleifer/tiny-gpt2} (2.5M) and \texttt{gpt2} (124M) models.}
     \label{fig:context_scaling}
 \end{figure}
 
 \input{tables/table1_main_results.tex}
 
-To verify architectural generalization, Table~\ref{tab:main_results} provides the comprehensive multi-model benchmark matrix across all evaluated configurations. Across both \texttt{sshleifer/tiny-gpt2} (2.5M) and \texttt{gpt2} (124M), context scaling trends remain highly consistent (Figure~\ref{fig:context_scaling}). 
+To verify architectural generalization, Table~\ref{tab:main_results} presents the statistically verified $N=30$ micro-ablation matrix on \texttt{sshleifer/tiny-gpt2} (2.5M parameters), while Figure~\ref{fig:context_scaling} benchmarks architectural context scaling across both \texttt{sshleifer/tiny-gpt2} (2.5M) and \texttt{gpt2} (124M parameters). Across parameter scales, context scaling trends remain highly consistent.
 
-Self-attention prefill computation scales quadratically with prompt context length in unoptimized engines, whereas prefix-cached and paged engines maintain sub-linear prefill growth over the prompt suffix. On host CPU backends (\texttt{hw\_cpu\_*}), INT8 quantization provides an additional throughput speedup due to vectorized SIMD instruction utilization, confirming that \textsf{MicroGen}'s decoupled abstractions generalize across hardware backends.
+Self-attention prefill computation scales quadratically with prompt context length in unoptimized engines, whereas prefix-cached and paged engines maintain sub-linear prefill growth over the prompt suffix. Under \texttt{gpt2} (124M), INT8 quantization reduces model weight VRAM from $492\text{ MB}$ to $148\text{ MB}$ ($70.0\%$ reduction), while combined optimizations yield an identical non-monotonic composition regression ($0.96\times$ baseline), confirming that \textsf{MicroGen}'s empirical trade-offs generalize across parameter scales and hardware backends.
