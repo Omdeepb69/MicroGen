@@ -54,30 +54,28 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 - [x] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
 - [x] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
 - [x] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
-- [ ] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
+- [x] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
 
 ---
 
 ## Current Task
 
-### Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target
-- **Objective**: Expand LaTeX paper manuscript (`paper/main.tex`, `paper/sections/`), table exporter (`scripts/export_paper_tables.py`), and figure generator (`scripts/generate_paper_figures.py`) to report multi-architecture generalization (Qwen2.5 / Llama-3.2), multi-GPU tensor-parallel scaling (T4x2), and hardware architecture duality (P100 vs T4). Compile updated PDF without errors or missing references.
-- **Depends on**: Task 23.1.3.
-- **Scope**: `scripts/export_paper_tables.py`, `scripts/generate_paper_figures.py`, `paper/sections/*.tex`, `paper/main.tex`.
-- **Constraints**: Maintain strict consistency between raw `results/raw/experiments.jsonl` data, exported LaTeX tables, and manuscript prose across all sections.
-- **Verification Criterion**: `python scripts/export_paper_tables.py` and `python scripts/generate_paper_figures.py` complete cleanly, and `cd paper && pdflatex -interaction=nonstopmode main.tex` produces a clean 11+ page PDF without broken references or unpopulated tables.
-
-
-
+All planned tasks in Phase 23 are complete. Ready for final project review or submission artifact packaging.
 
 ---
 
 ## Log
 
+### 2026-09-04 — Task 23.1.4 completed & Phase 23 complete
+- Changed: Added `export_table4_generalization_scaling` to `scripts/export_paper_tables.py`, expanded `paper/sections/05_evaluation.tex` with Table 4 and empirical discussions on Qwen2.5/Llama3.2 architectural generalization, multi-GPU tensor parallel scaling ($TP=2$), and P100 vs T4 hardware duality. Re-generated all LaTeX tables and vector figures, and re-compiled `paper/main.pdf`.
+- Files: `scripts/export_paper_tables.py`, `paper/sections/05_evaluation.tex`, `paper/tables/table4_generalization_scaling.tex`, `paper/main.pdf`, `PROJECT_PLAN.md`.
+- Verified: `export_paper_tables.py` and `generate_paper_figures.py` completed cleanly; `pdflatex main.tex` compiled a clean 13-page manuscript without errors.
+
 ### 2026-09-04 — Task 23.1.3 completed
 - Changed: Enhanced `experiments/hardware_duality.py` to extract device hardware metadata (`device_name`, `cuda_compute_capability`, `arch_generation`, `has_tensor_cores`) and updated `tests/experiments/test_hardware_duality.py` to assert hardware property fields.
 - Files: `experiments/hardware_duality.py`, `tests/experiments/test_hardware_duality.py`, `PROJECT_PLAN.md`.
 - Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_hardware_duality.py` passed 3/3 tests cleanly.
+
 
 ### 2026-09-04 — Task 23.1.2 completed
 - Changed: Implemented `experiments/tensor_parallel_scaling.py` and `tests/experiments/test_tensor_parallel_scaling.py` to benchmark 1-rank vs 2-rank `TensorParallelPyTorchBackend` execution. Integrated `experiments/tensor_parallel_scaling.py` into `scripts/run_all_paper_experiments.py`.
