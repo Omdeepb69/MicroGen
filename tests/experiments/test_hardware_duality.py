@@ -16,11 +16,14 @@ from experiments.hardware_duality import (
 def test_evaluate_hardware_device_execution_cpu():
     generator = WorkloadGenerator("sshleifer/tiny-gpt2")
     workload = generator.generate_suite("hw_test", num_requests=2, target_len_range=(32, 64), max_new_tokens=5, seed=42)
-    metrics = evaluate_hardware_device_execution("sshleifer/tiny-gpt2", workload, target_device="cpu", use_int8=False, use_paged=False)
+    metrics = evaluate_hardware_device_execution("sshleifer/tiny-gpt2", workload, target_device="cpu", optimization="fp32_baseline")
 
     assert "ttft_ms" in metrics
     assert "tpot_ms" in metrics
     assert "throughput_tok_per_sec" in metrics
+    assert "arch_generation" in metrics
+    assert "cuda_compute_capability" in metrics
+    assert "has_tensor_cores" in metrics
     assert metrics["target_device"] == "cpu"
     assert metrics["total_tokens"] > 0
 
@@ -28,10 +31,11 @@ def test_evaluate_hardware_device_execution_cpu():
 def test_evaluate_hardware_device_execution_combined():
     generator = WorkloadGenerator("sshleifer/tiny-gpt2")
     workload = generator.generate_suite("hw_test", num_requests=2, target_len_range=(32, 64), max_new_tokens=5, seed=42)
-    metrics = evaluate_hardware_device_execution("sshleifer/tiny-gpt2", workload, target_device="cpu", use_int8=True, use_paged=True)
+    metrics = evaluate_hardware_device_execution("sshleifer/tiny-gpt2", workload, target_device="cpu", optimization="int8_paged_combined")
 
     assert "ttft_ms" in metrics
     assert "tpot_ms" in metrics
+    assert "arch_generation" in metrics
     assert metrics["use_int8"] is True
     assert metrics["use_paged"] is True
     assert metrics["total_tokens"] > 0

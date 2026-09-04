@@ -53,19 +53,20 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 ### Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Track Scaling)
 - [x] Task 23.1.1: Modern Architecture Family Support (Qwen2.5 & Llama-3.2 Engine Adaptors) (`microgen/backends/`, `experiments/model_generalization.py`)
 - [x] Task 23.1.2: Multi-GPU Tensor Parallel Scaling Verification (`ParallelBackend` on T4x2) (`experiments/tensor_parallel_scaling.py`)
-- [ ] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
+- [x] Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing) (`experiments/hardware_duality.py`)
 - [ ] Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target (`scripts/export_paper_tables.py`, `paper/sections/`)
 
 ---
 
 ## Current Task
 
-### Task 23.1.3: Cross-Generation Hardware Duality Sweep (P100 Pascal vs T4 Turing)
-- **Objective**: Execute core micro-ablation sweeps (Baseline FP32, INT8 Quantization, Paged KV, Prefix Caching r=100%, Speculative Decoding) on NVIDIA P100 (Pascal architecture, FP32/FP16 without Tensor Cores) to compare against T4 (Turing architecture with Tensor Cores), logging hardware metadata and compute capabilities to `results/raw/experiments.jsonl`.
-- **Depends on**: Task 23.1.2.
-- **Scope**: `experiments/hardware_duality.py`, `scripts/run_all_paper_experiments.py`, `tests/experiments/test_hardware_duality.py`.
-- **Constraints**: Log explicit device metadata (`device_name`, `cuda_compute_capability`, `arch_generation`) in JSONL trial records.
-- **Verification Criterion**: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_hardware_duality.py` passes on CPU/CUDA, and raw $N=30$ trial metrics are logged to `results/raw/experiments.jsonl`.
+### Task 23.1.4: Paper Manuscript & Table Generator Expansion for MLSys Target
+- **Objective**: Expand LaTeX paper manuscript (`paper/main.tex`, `paper/sections/`), table exporter (`scripts/export_paper_tables.py`), and figure generator (`scripts/generate_paper_figures.py`) to report multi-architecture generalization (Qwen2.5 / Llama-3.2), multi-GPU tensor-parallel scaling (T4x2), and hardware architecture duality (P100 vs T4). Compile updated PDF without errors or missing references.
+- **Depends on**: Task 23.1.3.
+- **Scope**: `scripts/export_paper_tables.py`, `scripts/generate_paper_figures.py`, `paper/sections/*.tex`, `paper/main.tex`.
+- **Constraints**: Maintain strict consistency between raw `results/raw/experiments.jsonl` data, exported LaTeX tables, and manuscript prose across all sections.
+- **Verification Criterion**: `python scripts/export_paper_tables.py` and `python scripts/generate_paper_figures.py` complete cleanly, and `cd paper && pdflatex -interaction=nonstopmode main.tex` produces a clean 11+ page PDF without broken references or unpopulated tables.
+
 
 
 
@@ -73,10 +74,16 @@ Phase 23 — Multi-Architecture & Multi-GPU Empirical Expansion (MLSys Main-Trac
 
 ## Log
 
+### 2026-09-04 — Task 23.1.3 completed
+- Changed: Enhanced `experiments/hardware_duality.py` to extract device hardware metadata (`device_name`, `cuda_compute_capability`, `arch_generation`, `has_tensor_cores`) and updated `tests/experiments/test_hardware_duality.py` to assert hardware property fields.
+- Files: `experiments/hardware_duality.py`, `tests/experiments/test_hardware_duality.py`, `PROJECT_PLAN.md`.
+- Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_hardware_duality.py` passed 3/3 tests cleanly.
+
 ### 2026-09-04 — Task 23.1.2 completed
 - Changed: Implemented `experiments/tensor_parallel_scaling.py` and `tests/experiments/test_tensor_parallel_scaling.py` to benchmark 1-rank vs 2-rank `TensorParallelPyTorchBackend` execution. Integrated `experiments/tensor_parallel_scaling.py` into `scripts/run_all_paper_experiments.py`.
 - Files: `experiments/tensor_parallel_scaling.py`, `tests/experiments/test_tensor_parallel_scaling.py`, `scripts/run_all_paper_experiments.py`, `PROJECT_PLAN.md`.
 - Verified: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/experiments/test_tensor_parallel_scaling.py` passed 3/3 tests cleanly.
+
 
 ### 2026-09-04 — Task 23.1.1 completed
 - Changed: Enabled modern open-weights architecture family support (`Qwen/Qwen2.5-0.5B`, `meta-llama/Llama-3.2-1B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`) with `trust_remote_code=True` across `PyTorchBackend`, `QuantizedPyTorchBackend`, `WorkloadGenerator`, and `experiments/model_generalization.py`. Added multi-architecture unit tests.

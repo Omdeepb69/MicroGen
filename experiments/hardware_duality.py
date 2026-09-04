@@ -17,16 +17,54 @@ from microgen.devices import get_device
 from microgen.runtime.paged_kv import PagedKVCacheAllocator
 
 
+def get_device_hardware_metadata(target_device: str) -> Dict[str, Any]:
+    """Returns hardware architecture metadata (name, compute capability, architecture generation, tensor cores)."""
+    if "cuda" in target_device and torch.cuda.is_available():
+        try:
+            dev_idx = int(target_device.split(":")[-1]) if ":" in target_device else 0
+            props = torch.cuda.get_device_properties(dev_idx)
+            name = torch.cuda.get_device_name(dev_idx)
+            cc = f"{props.major}.{props.minor}"
+            if props.major == 6:
+                gen = "Pascal (P100-era)"
+            elif props.major == 7:
+                gen = "Turing (T4-era)" if props.minor == 5 else "Volta"
+            elif props.major == 8:
+                gen = "Ampere"
+            elif props.major == 9:
+                gen = "Hopper"
+            else:
+                gen = f"CUDA-CC{props.major}"
+            has_tc = props.major >= 7
+            return {
+                "device_name": name,
+                "cuda_compute_capability": cc,
+                "arch_generation": gen,
+                "has_tensor_cores": has_tc,
+            }
+        except Exception:
+            pass
+    return {
+        "device_name": "CPU Host",
+        "cuda_compute_capability": "N/A",
+        "arch_generation": "x86_64 CPU",
+        "has_tensor_cores": False,
+    }
+
+
 def evaluate_hardware_device_execution(
     model_name: str,
     workload: WorkloadSuite,
     target_device: str = "cpu",
-    use_int8: bool = False,
-    use_paged: bool = False,
+    optimization: str = "fp32_baseline",
     backend: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Evaluates model inference performance under a specific hardware device and optimization state."""
     device_obj = get_device(target_device if (target_device == "cpu" or torch.cuda.is_available()) else "cpu")
+    hw_meta = get_device_hardware_metadata(target_device)
+
+    use_int8 = "int8" in optimization or "combined" in optimization
+    use_paged = "paged" in optimization or "combined" in optimization
 
     if backend is None:
         if use_int8:
@@ -87,9 +125,10 @@ def evaluate_hardware_device_execution(
     alloc_mb = mem_info.get("allocated_bytes", 0) / (1024.0 * 1024.0)
     res_mb = mem_info.get("reserved_bytes", mem_info.get("allocated_bytes", 0)) / (1024.0 * 1024.0)
 
-    return {
+    res_dict = {
         "model_name": model_name,
         "target_device": target_device,
+        "optimization": optimization,
         "use_int8": use_int8,
         "use_paged": use_paged,
         "ttft_ms": total_ttft_ms / max(1, num_reqs),
@@ -100,6 +139,8 @@ def evaluate_hardware_device_execution(
         "vram_allocated_mb": alloc_mb,
         "vram_reserved_mb": res_mb,
     }
+    res_dict.update(hw_meta)
+    return res_dict
 
 
 def run_hardware_duality_experiment(
@@ -127,16 +168,16 @@ def run_hardware_duality_experiment(
     )
 
     profiles = [
-        ("fp32_baseline", False, False),
-        ("int8_quant", True, False),
-        ("paged_kv", False, True),
-        ("int8_paged_combined", True, True),
+        "fp32_baseline",
+        "int8_quant",
+        "paged_kv",
+        "int8_paged_combined",
     ]
 
     results: List[ExperimentResult] = []
 
     for dev in target_devices:
-        for profile_name, use_int8, use_paged in profiles:
+        for profile_name in profiles:
             baseline_type = "microgen_unoptimized" if profile_name == "fp32_baseline" else "microgen_optimized"
             config = ExperimentConfig(
                 model_name=model_name,
@@ -149,12 +190,11 @@ def run_hardware_duality_experiment(
                 jsonl_filename=jsonl_filename,
             )
             harness = ExperimentHarness(config)
-            fn = lambda d=dev, i8=use_int8, pg=use_paged: evaluate_hardware_device_execution(
+            fn = lambda d=dev, p=profile_name: evaluate_hardware_device_execution(
                 model_name=model_name,
                 workload=workload,
                 target_device=d,
-                use_int8=i8,
-                use_paged=pg,
+                optimization=p,
             )
             res = harness.run_experiment(f"hw_{dev}_{profile_name}", len(workload.requests), fn)
             results.append(res)
@@ -174,3 +214,4 @@ if __name__ == "__main__":
     print(f"Executing Hardware Heterogeneity & CPU vs GPU Efficiency Profile Experiment (N={trials} trials)...")
     results = run_hardware_duality_experiment(n_trials=trials, warmup_trials=warmups)
     print(f"Hardware duality experiment complete! Total experiments recorded: {len(results)}")
+
