@@ -23,16 +23,18 @@ def evaluate_hardware_device_execution(
     target_device: str = "cpu",
     use_int8: bool = False,
     use_paged: bool = False,
+    backend: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Evaluates model inference performance under a specific hardware device and optimization state."""
     device_obj = get_device(target_device if (target_device == "cpu" or torch.cuda.is_available()) else "cpu")
 
-    if use_int8:
-        backend = QuantizedPyTorchBackend(device=device_obj, quant_type="int8")
-    else:
-        backend = PyTorchBackend(device=device_obj)
+    if backend is None:
+        if use_int8:
+            backend = QuantizedPyTorchBackend(device=device_obj, quant_type="int8")
+        else:
+            backend = PyTorchBackend(device=device_obj)
+        backend.load_model(model_name)
 
-    backend.load_model(model_name)
     paged_allocator = PagedKVCacheAllocator(num_blocks=128, block_size=16) if use_paged else None
 
     total_ttft_ms = 0.0

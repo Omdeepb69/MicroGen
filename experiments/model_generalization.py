@@ -25,6 +25,7 @@ def evaluate_model_optimization(
     workload: WorkloadSuite,
     optimization: str = "baseline_fp32",
     device_str: str = "cpu",
+    backend: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Evaluates a single model under a specified optimization configuration."""
     device_obj = CUDADevice(0) if ("cuda" in device_str and torch.cuda.is_available()) else CPUDevice()
@@ -33,12 +34,12 @@ def evaluate_model_optimization(
     use_paged = "paged" in optimization or "all_combined" in optimization
     use_prefix = "prefix" in optimization or "all_combined" in optimization
 
-    if use_int8:
-        backend = QuantizedPyTorchBackend(device=device_obj, quant_type="int8")
-    else:
-        backend = PyTorchBackend(device=device_obj)
-
-    backend.load_model(model_name)
+    if backend is None:
+        if use_int8:
+            backend = QuantizedPyTorchBackend(device=device_obj, quant_type="int8")
+        else:
+            backend = PyTorchBackend(device=device_obj)
+        backend.load_model(model_name)
 
     prefix_cache = PrefixKVCache(max_capacity=100) if use_prefix else None
     paged_allocator = PagedKVCacheAllocator(num_blocks=128, block_size=16) if use_paged else None
