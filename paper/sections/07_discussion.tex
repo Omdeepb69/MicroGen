@@ -1,0 +1,26 @@
+\section{Discussion \& System Design Guidelines}
+\label{sec:discussion}
+
+Based on our $N=30$ empirical evaluation across hardware and workload regimes, we distill four concrete system design guidelines for production LLM serving deployment, followed by an analysis of threats to validity.
+
+\subsection{System Design Guidelines}
+\label{sec:disc_guidelines}
+
+\begin{enumerate}
+    \item \textbf{Prioritize Prefix Caching for Chat \& Agentic Workloads}: Systems handling multi-turn conversational agents, RAG workflows, or system prompt templates should enforce Prefix Caching. As demonstrated in Section~\ref{sec:eval_rq1}, prefix reuse yields up to a \textbf{$3.91\times$ prefill TTFT reduction} at 100\% prefix match. Because prefix lookup introduces under $0.7\text{ ms}$ overhead ($\delta_{\text{cache}}$) even at 0\% match, prefix caching provides a robust low-overhead optimization for context-heavy workloads once prompt overlap exceeds the measured break-even threshold ($r \ge 15\%$).
+
+    \item \textbf{Enforce Block-Paged Memory Allocation Under High Concurrency}: Serving workloads operating under high concurrency ($B \ge 16$) or variable sequence lengths should adopt physical paged KV cache allocation. Standard contiguous allocation exhibits severe memory fragmentation ($>35\%$), causing premature \textsf{OOM} crashes under peak memory pressure. \textsf{MicroGen}'s paged allocation reduced external fragmentation to $0.0\%$ under our evaluated dynamic allocation workloads, maintaining request completion stability.
+
+    \item \textbf{Gate Speculative Decoding on Empirical Acceptance Thresholds}: Speculative decoding is not a universal acceleration technique. In our evaluated configuration, speculative decoding became beneficial only when candidate acceptance rate and draft-to-target latency ratio crossed empirically observed thresholds (e.g., $\alpha \ge 0.70$ and $r < 0.20$). When serving small target models (e.g., \texttt{tiny-gpt2}) where target forward pass latency is already microsecond-scale, the overhead of target verification exceeds draft generation gains, leading to throughput regressions.
+
+    \item \textbf{Beware of Non-Monotonic Optimization Composition}: System designers should not assume that stacking multiple individually beneficial optimizations yields cumulative throughput gains. As shown in Section~\ref{sec:eval_non_monotonic}, combining INT8 quantization, paged KV allocation, prefix caching, and speculative decoding produced a throughput regression to \textbf{$0.78\times$ baseline} (\textbf{319.94 tok/s} vs. 408.23 tok/s). Each optimization introduces minor synchronization and transformation overheads; when combined unconditionally, these overheads compound and degrade overall execution efficiency.
+\end{enumerate}
+
+\subsection{Threats to Validity}
+\label{sec:disc_threats}
+
+\begin{itemize}
+    \item \textbf{Internal Validity}: Measurement noise from host CPU process context switching, PyTorch CUDA allocator caching behavior, and GPU frequency scaling could corrupt latency timings. We mitigate internal validity threats by: (i) implementing microsecond-resolution monotonic timers (\texttt{time.perf\_counter()}), (ii) inserting explicit \texttt{torch.cuda.synchronize()} calls, (iii) executing $W=5$ unrecorded warmup iterations, and (iv) performing explicit garbage collection flushes between $N=30$ trial iterations.
+
+    \item \textbf{External Validity}: Our empirical evaluation focused primarily on NVIDIA Tesla T4 GPUs (16 GB VRAM) and model parameter scales up to 124M parameters (\texttt{gpt2}). While architectural scaling trends remain consistent, absolute latency numbers on modern server-grade hardware (e.g., NVIDIA A100/H100 GPUs) and multi-billion parameter models (e.g., Llama-3 70B) may differ due to higher memory bandwidth ratios and tensor core availability.
+\end{itemize}

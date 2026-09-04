@@ -1,0 +1,73 @@
+\section{Modular Optimization Techniques}
+\label{sec:optimizations}
+
+To systematically benchmark LLM serving trade-offs, \textsf{MicroGen} formalizes five modular inference optimizations. Each technique is implemented behind abstract interfaces (\textsf{InferenceBackend}, \textsf{KVCache}, \textsf{Scheduler}), ensuring that individual performance gains and negative overheads can be isolated empirically.
+
+\subsection{Hash-Based Shared Prefix Caching}
+\label{sec:opt_prefix}
+
+In multi-turn chat interactions and agentic workflows, concurrent requests frequently share identical prompt prefixes (e.g., system instructions, few-shot demonstrations, or context documents). \textsf{MicroGen} implements a hash-based Prefix Cache abstraction (\texttt{microgen/caching/prefix\_cache.py}) to eliminate redundant prefill compute, modeling the algorithmic principles of Radix Trie lookup in a lightweight Python/PyTorch substrate.
+
+Given an incoming request prompt sequence $P = (t_1, t_2, \dots, t_N)$, the prefix manager queries the cache table to find the Longest Common Prefix (LCP) length $\ell_{\text{match}}$ already cached in GPU memory:
+\begin{equation}
+    \ell_{\text{match}} = \max \{ k \le N \mid (t_1, \dots, t_k) \in \text{\textsf{PrefixCache}} \}
+\end{equation}
+If $\ell_{\text{match}} > 0$, the scheduler reuses the precomputed Key and Value tensors for tokens $t_{1..\ell_{\text{match}}}$. The prefill forward pass is executed exclusively over the remaining prompt suffix $P_{\text{suffix}} = (t_{\ell_{\text{match}}+1}, \dots, t_N)$.
+
+The analytical Time-to-First-Token (\textsf{TTFT}) for cached execution is modeled as:
+\begin{equation}
+    \text{\textsf{TTFT}}_{\text{cached}} = \text{\textsf{TTFT}}_{\text{baseline}} \cdot \left(1 - \frac{\ell_{\text{match}}}{N}\right) + \delta_{\text{cache}}
+\end{equation}
+where $\delta_{\text{cache}} < 0.7\text{ ms}$ represents the measured prefix cache lookup overhead.
+
+\subsection{Post-Training Weight Quantization}
+\label{sec:opt_quant}
+
+To reduce GPU VRAM footprint and enable larger batch capacities under memory-constrained regimes, \textsf{MicroGen} integrates per-tensor symmetric INT8 weight quantization (\texttt{microgen/backends/quantized.py}).
+
+Each full-precision weight matrix $W_{\text{fp32}} \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ is mapped to a signed 8-bit integer matrix $W_{\text{int8}} \in \mathbb{Z}^{d_{\text{out}} \times d_{\text{in}}}$ via a scalar scale factor $\gamma$:
+\begin{align}
+    \gamma &= \frac{\max(|W_{\text{fp32}}|)}{127} \\
+    W_{\text{int8}} &= \text{\textsf{clamp}}\left(\text{\textsf{round}}\left(\frac{W_{\text{fp32}}}{\gamma}\right), -128, 127\right)
+\end{align}
+During inference forward passes, linear layer matrix multiplications are computed as:
+\begin{equation}
+    Y = \left(X \cdot W_{\text{int8}}^T\right) \cdot \gamma + b
+\end{equation}
+Quantization reduces weight memory consumption by up to $4\times$, transforming the storage requirement from 4 bytes per parameter (FP32) to 1 byte per parameter (INT8), with minimal impact on output logit accuracy.
+
+\subsection{Speculative Decoding Draft-Target Verification}
+\label{sec:opt_speculative}
+
+Autoregressive decoding is inherently memory-bandwidth-dominated due to single-token generation iterations. \textsf{MicroGen} implements Speculative Decoding (\texttt{microgen/scheduler/speculative.py}), which pairs a small, low-latency draft model $\mathcal{M}_{\text{draft}}$ with a high-capacity target model $\mathcal{M}_{\text{target}}$.
+
+The speculative execution loop operates in two distinct phases:
+\begin{enumerate}
+    \item \textbf{Draft Generation}: $\mathcal{M}_{\text{draft}}$ autoregressively generates $K$ candidate tokens $\tilde{x}_{1..K}$ at high throughput.
+    \item \textbf{Parallel Target Verification}: $\mathcal{M}_{\text{target}}$ performs a single parallel prefill-style forward pass over the combined sequence length $K+1$, evaluating candidate probabilities $P_{\text{target}}(\tilde{x}_i \mid x_{<i})$.
+\end{enumerate}
+
+Candidates are validated sequentially using modified rejection sampling. Candidate $\tilde{x}_i$ is accepted with probability:
+\begin{equation}
+    P(\text{accept } \tilde{x}_i) = \min\left(1, \frac{P_{\text{target}}(\tilde{x}_i \mid x_{<i})}{P_{\text{draft}}(\tilde{x}_i \mid x_{<i})}\right)
+\end{equation}
+If a candidate $\tilde{x}_k$ is rejected, it is resampled from the adjusted distribution $P_{\text{resample}}(x) = \text{\textsf{relu}}(P_{\text{target}}(x) - P_{\text{draft}}(x))$, and candidate tokens beyond index $k$ are discarded.
+
+\subsection{Tensor Parallel Multi-GPU Execution}
+\label{sec:opt_tensor_parallel}
+
+For models exceeding single-GPU VRAM capacity, \textsf{MicroGen} provides intra-node Tensor Parallelism (\texttt{microgen/backends/parallel.py}) based on Megatron-style matrix partitioning across $T$ accelerator devices.
+
+In self-attention modules, key, query, and value projection matrices are column-partitioned across GPUs:
+\begin{equation}
+    W_Q = [W_{Q,1} \mid \dots \mid W_{Q,T}], \quad W_K = [W_{K,1} \mid \dots \mid W_{K,T}]
+\end{equation}
+The attention output projection $W_O$ is row-partitioned:
+\begin{equation}
+    W_O = \begin{bmatrix} W_{O,1} \\ \vdots \\ W_{O,T} \end{bmatrix}
+\end{equation}
+An \textsf{All-Reduce} sum operation synchronizes output activations across all devices per layer:
+\begin{equation}
+    Y = \sum_{i=1}^T X_i W_{O,i}
+\end{equation}
+This linear decomposition distributes matrix storage and floating-point operations evenly across available CUDA GPUs.

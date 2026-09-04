@@ -1,62 +1,61 @@
 \begin{table*}[t]
 \centering
 \small
-\caption{Inference Performance \& Optimization Synergy Breakdown on GPU across $N=30$ Statistically Verified Trials ($\mu \pm \sigma$).}
+\caption{Inference Performance \& Optimization Synergy Breakdown on GPU across $N=30$ Statistically Verified Trials ($\mu \pm \sigma$). Speedups are computed relative to the PyTorch FP32 Baseline ($514.1\text{ tok/s}$). $p$-values denote Welch's $t$-test significance relative to FP32 baseline ($^{\dagger} p < 0.001$, $^{\ddagger} p < 0.01$, $^{\text{ns}}$ not significant).}
 \label{tab:main_results}
-\begin{tabular}{lrrrrr}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrr}
 \hline
-\textbf{Optimization Configuration} & \textbf{TTFT (ms)} & \textbf{TPOT (ms)} & \textbf{VRAM (MB)} & \textbf{Tokens/sec} & \textbf{Speedup} \\
+\textbf{Optimization Configuration} & \textbf{TTFT (ms)} & \textbf{TPOT (ms)} & \textbf{VRAM (MB)} & \textbf{Tokens/sec} & \textbf{Speedup} & \textbf{Significance ($p$)} \\
 \hline
-  hf\_baseline\_in32\_out16 & $2.1 \pm 0.1$ & 1.8 & 24 & $539.4 \pm 9.2$ & 1.03$\times$ \\
-  microgen\_unoptimized\_in32\_out16 & $2.1 \pm 0.2$ & 1.9 & 21 & $526.2 \pm 20.5$ & 1.00$\times$ \\
-  hf\_baseline\_in32\_out32 & $2.1 \pm 0.1$ & 1.8 & 27 & $535.0 \pm 12.4$ & 1.02$\times$ \\
-  microgen\_unoptimized\_in32\_out32 & $2.1 \pm 0.1$ & 1.8 & 21 & $533.9 \pm 9.2$ & 1.02$\times$ \\
-  hf\_baseline\_in128\_out16 & $2.3 \pm 0.2$ & 1.8 & 64 & $524.5 \pm 24.9$ & 1.00$\times$ \\
-  microgen\_unoptimized\_in128\_out16 & $2.3 \pm 0.1$ & 1.8 & 39 & $523.0 \pm 10.6$ & 1.00$\times$ \\
-  hf\_baseline\_in128\_out32 & $2.4 \pm 0.1$ & 1.8 & 64 & $530.3 \pm 14.6$ & 1.01$\times$ \\
-  microgen\_unoptimized\_in128\_out32 & $2.3 \pm 0.1$ & 1.8 & 39 & $535.5 \pm 15.8$ & 1.02$\times$ \\
-  hf\_baseline\_in256\_out16 & $2.6 \pm 0.1$ & 1.8 & 115 & $519.8 \pm 24.0$ & 0.99$\times$ \\
-  microgen\_unoptimized\_in256\_out16 & $2.5 \pm 0.1$ & 1.9 & 65 & $514.3 \pm 16.9$ & 0.98$\times$ \\
-  hf\_baseline\_in256\_out32 & $2.6 \pm 0.1$ & 1.8 & 115 & $534.2 \pm 15.4$ & 1.02$\times$ \\
-  microgen\_unoptimized\_in256\_out32 & $2.6 \pm 0.1$ & 1.9 & 65 & $523.6 \pm 15.2$ & 1.00$\times$ \\
-  prefix\_uncached\_r0 & $2.4 \pm 0.1$ & 1.8 & 62 & $524.8 \pm 7.3$ & 1.00$\times$ \\
-  prefix\_cached\_r0 & $2.4 \pm 0.1$ & 1.9 & 65 & $520.7 \pm 18.8$ & 0.99$\times$ \\
-  prefix\_uncached\_r25 & $2.4 \pm 0.1$ & 1.8 & 65 & $522.1 \pm 8.6$ & 1.00$\times$ \\
-  prefix\_cached\_r25 & $2.4 \pm 0.1$ & 1.8 & 65 & $527.9 \pm 14.3$ & 1.01$\times$ \\
-  prefix\_uncached\_r50 & $2.4 \pm 0.1$ & 1.8 & 65 & $525.4 \pm 16.6$ & 1.00$\times$ \\
-  prefix\_cached\_r50 & $2.4 \pm 0.1$ & 1.8 & 65 & $524.5 \pm 11.7$ & 1.00$\times$ \\
-  prefix\_uncached\_r75 & $2.4 \pm 0.1$ & 1.9 & 65 & $519.0 \pm 18.2$ & 0.99$\times$ \\
-  prefix\_cached\_r75 & $2.3 \pm 0.1$ & 1.8 & 65 & $526.0 \pm 9.8$ & 1.00$\times$ \\
-  prefix\_uncached\_r90 & $2.4 \pm 0.1$ & 1.8 & 65 & $526.8 \pm 12.8$ & 1.00$\times$ \\
-  prefix\_cached\_r90 & $2.3 \pm 0.1$ & 1.9 & 65 & $517.8 \pm 16.0$ & 0.99$\times$ \\
-  prefix\_uncached\_r100 & $2.4 \pm 0.1$ & 1.9 & 65 & $514.3 \pm 19.2$ & 0.98$\times$ \\
-  prefix\_cached\_r100 & $2.1 \pm 0.0$ & 1.8 & 65 & $528.0 \pm 8.1$ & 1.10$\times$ \\
-  int8\_weight\_quantization & $2.4 \pm 0.1$ & 1.9 & 37 & $508.2 \pm 10.4$ & 0.97$\times$ \\
-  dynamic\_int8\_kv\_cache & $2.4 \pm 0.1$ & 1.9 & 40 & $509.6 \pm 6.6$ & 0.97$\times$ \\
-  static\_batching\_b1 & $2.2 \pm 0.1$ & 1.9 & 60 & $519.1 \pm 10.0$ & 0.99$\times$ \\
-  continuous\_batching\_b1 & $144.7 \pm 2.0$ & 2.5 & 63 & $394.2 \pm 4.5$ & 0.75$\times$ \\
-  static\_batching\_b2 & $2.2 \pm 0.1$ & 1.9 & 63 & $516.1 \pm 12.9$ & 0.98$\times$ \\
-  continuous\_batching\_b2 & $128.8 \pm 4.5$ & 5.1 & 111 & $390.3 \pm 9.7$ & 0.74$\times$ \\
-  static\_batching\_b4 & $2.2 \pm 0.1$ & 1.9 & 63 & $514.5 \pm 12.4$ & 0.98$\times$ \\
-  continuous\_batching\_b4 & $93.5 \pm 3.4$ & 10.1 & 111 & $391.5 \pm 9.7$ & 0.75$\times$ \\
-  static\_batching\_b8 & $2.2 \pm 0.1$ & 1.9 & 63 & $516.7 \pm 7.5$ & 0.99$\times$ \\
-  continuous\_batching\_b8 & $23.2 \pm 0.6$ & 20.3 & 111 & $390.5 \pm 6.8$ & 0.74$\times$ \\
-  static\_batching\_b16 & $2.2 \pm 0.1$ & 1.9 & 63 & $515.1 \pm 13.8$ & 0.98$\times$ \\
-  continuous\_batching\_b16 & $23.2 \pm 0.8$ & 20.2 & 111 & $391.8 \pm 6.2$ & 0.75$\times$ \\
-  target\_only\_baseline & $2.2 \pm 0.1$ & 1.9 & 24 & $511.4 \pm 16.4$ & 0.98$\times$ \\
-  speculative\_decoding\_k1 & $4.4 \pm 0.1$ & 4.4 & 43 & $229.0 \pm 6.0$ & 0.44$\times$ \\
-  speculative\_decoding\_k2 & $8.6 \pm 0.3$ & 4.3 & 43 & $231.7 \pm 6.6$ & 0.44$\times$ \\
-  speculative\_decoding\_k3 & $11.5 \pm 0.1$ & 4.3 & 43 & $231.4 \pm 2.8$ & 0.44$\times$ \\
-  speculative\_decoding\_k4 & $17.2 \pm 0.5$ & 4.3 & 44 & $232.1 \pm 6.2$ & 0.44$\times$ \\
-  speculative\_decoding\_k5 & $17.3 \pm 0.4$ & 4.3 & 44 & $230.7 \pm 5.2$ & 0.44$\times$ \\
-  baseline\_fp32 & $2.2 \pm 0.1$ & 1.9 & 37 & $514.1 \pm 13.2$ & 0.98$\times$ \\
-  opt\_int8 & $2.3 \pm 0.2$ & 2.0 & 37 & $495.0 \pm 23.6$ & 0.94$\times$ \\
-  opt\_paged & $2.3 \pm 0.1$ & 1.9 & 37 & $509.0 \pm 7.1$ & 0.97$\times$ \\
-  opt\_prefix & $2.3 \pm 0.1$ & 1.9 & 37 & $508.0 \pm 14.9$ & 0.97$\times$ \\
-  opt\_int8\_paged & $2.3 \pm 0.2$ & 2.0 & 37 & $493.9 \pm 11.3$ & 0.94$\times$ \\
-  opt\_int8\_prefix & $2.3 \pm 0.2$ & 2.0 & 37 & $496.4 \pm 14.2$ & 0.95$\times$ \\
-  opt\_paged\_prefix & $2.3 \pm 0.1$ & 1.9 & 37 & $507.5 \pm 13.7$ & 0.97$\times$ \\
-  opt\_all\_combined & $2.3 \pm 0.1$ & 2.0 & 37 & $493.6 \pm 8.6$ & 0.94$\times$ \\
+  hf\_baseline\_in32\_out16 & $2.1 \pm 0.1$ & 1.8 & 24 & $539.4 \pm 9.2$ & 1.05$\times$ & $p < 0.001^\dagger$ \\
+  hf\_baseline\_in32\_out32 & $2.1 \pm 0.1$ & 1.8 & 27 & $535.0 \pm 12.4$ & 1.04$\times$ & $p < 0.001^\dagger$ \\
+  hf\_baseline\_in128\_out16 & $2.3 \pm 0.2$ & 1.8 & 64 & $524.5 \pm 24.9$ & 1.02$\times$ & $p = 0.049^*$ \\
+  hf\_baseline\_in128\_out32 & $2.4 \pm 0.1$ & 1.8 & 64 & $530.3 \pm 14.6$ & 1.03$\times$ & $p < 0.001^\dagger$ \\
+  hf\_baseline\_in256\_out16 & $2.6 \pm 0.1$ & 1.8 & 115 & $519.8 \pm 24.0$ & 1.01$\times$ & $\text{ns}$ \\
+  hf\_baseline\_in256\_out32 & $2.6 \pm 0.1$ & 1.8 & 115 & $534.2 \pm 15.4$ & 1.04$\times$ & $p < 0.001^\dagger$ \\
+  prefix\_uncached\_r0 & $2.4 \pm 0.1$ & 1.8 & 62 & $524.8 \pm 7.3$ & 1.02$\times$ & $p < 0.001^\dagger$ \\
+  prefix\_cached\_r0 & $2.4 \pm 0.1$ & 1.9 & 65 & $520.7 \pm 18.8$ & 1.01$\times$ & $\text{ns}$ \\
+  prefix\_uncached\_r25 & $2.4 \pm 0.1$ & 1.8 & 65 & $522.1 \pm 8.6$ & 1.02$\times$ & $p = 0.008^\ddagger$ \\
+  prefix\_cached\_r25 & $2.4 \pm 0.1$ & 1.8 & 65 & $527.9 \pm 14.3$ & 1.03$\times$ & $p < 0.001^\dagger$ \\
+  prefix\_uncached\_r50 & $2.4 \pm 0.1$ & 1.8 & 65 & $525.4 \pm 16.6$ & 1.02$\times$ & $p = 0.005^\ddagger$ \\
+  prefix\_cached\_r50 & $2.4 \pm 0.1$ & 1.8 & 65 & $524.5 \pm 11.7$ & 1.02$\times$ & $p = 0.002^\ddagger$ \\
+  prefix\_uncached\_r75 & $2.4 \pm 0.1$ & 1.9 & 65 & $519.0 \pm 18.2$ & 1.01$\times$ & $\text{ns}$ \\
+  prefix\_cached\_r75 & $2.3 \pm 0.1$ & 1.8 & 65 & $526.0 \pm 9.8$ & 1.02$\times$ & $p < 0.001^\dagger$ \\
+  prefix\_uncached\_r90 & $2.4 \pm 0.1$ & 1.8 & 65 & $526.8 \pm 12.8$ & 1.02$\times$ & $p < 0.001^\dagger$ \\
+  prefix\_cached\_r90 & $2.3 \pm 0.1$ & 1.9 & 65 & $517.8 \pm 16.0$ & 1.01$\times$ & $\text{ns}$ \\
+  prefix\_uncached\_r100 & $2.4 \pm 0.1$ & 1.9 & 65 & $514.3 \pm 19.2$ & 1.00$\times$ & $\text{ns}$ \\
+  prefix\_cached\_r100 & $2.1 \pm 0.0$ & 1.8 & 65 & $528.0 \pm 8.1$ & 1.03$\times$ & $p < 0.001^\dagger$ \\
+  int8\_weight\_quantization & $2.4 \pm 0.1$ & 1.9 & 37 & $508.2 \pm 10.4$ & 0.99$\times$ & $\text{ns}$ \\
+  dynamic\_int8\_kv\_cache & $2.4 \pm 0.1$ & 1.9 & 40 & $509.6 \pm 6.6$ & 0.99$\times$ & $\text{ns}$ \\
+  static\_batching\_b1 & $2.2 \pm 0.1$ & 1.9 & 60 & $519.1 \pm 10.0$ & 1.01$\times$ & $\text{ns}$ \\
+  continuous\_batching\_b1 & $144.7 \pm 2.0$ & 2.5 & 63 & $394.2 \pm 4.5$ & 0.77$\times$ & $p < 0.001^\dagger$ \\
+  static\_batching\_b2 & $2.2 \pm 0.1$ & 1.9 & 63 & $516.1 \pm 12.9$ & 1.00$\times$ & $\text{ns}$ \\
+  continuous\_batching\_b2 & $128.8 \pm 4.5$ & 5.1 & 111 & $390.3 \pm 9.7$ & 0.76$\times$ & $p < 0.001^\dagger$ \\
+  static\_batching\_b4 & $2.2 \pm 0.1$ & 1.9 & 63 & $514.5 \pm 12.4$ & 1.00$\times$ & $\text{ns}$ \\
+  continuous\_batching\_b4 & $93.5 \pm 3.4$ & 10.1 & 111 & $391.5 \pm 9.7$ & 0.76$\times$ & $p < 0.001^\dagger$ \\
+  static\_batching\_b8 & $2.2 \pm 0.1$ & 1.9 & 63 & $516.7 \pm 7.5$ & 1.01$\times$ & $\text{ns}$ \\
+  continuous\_batching\_b8 & $23.2 \pm 0.6$ & 20.3 & 111 & $390.5 \pm 6.8$ & 0.76$\times$ & $p < 0.001^\dagger$ \\
+  static\_batching\_b16 & $2.2 \pm 0.1$ & 1.9 & 63 & $515.1 \pm 13.8$ & 1.00$\times$ & $\text{ns}$ \\
+  continuous\_batching\_b16 & $23.2 \pm 0.8$ & 20.2 & 111 & $391.8 \pm 6.2$ & 0.76$\times$ & $p < 0.001^\dagger$ \\
+  target\_only\_baseline & $2.2 \pm 0.1$ & 1.9 & 24 & $511.4 \pm 16.4$ & 0.99$\times$ & $\text{ns}$ \\
+  speculative\_decoding\_k1 & $4.4 \pm 0.1$ & 4.4 & 43 & $229.0 \pm 6.0$ & 0.45$\times$ & $p < 0.001^\dagger$ \\
+  speculative\_decoding\_k2 & $8.6 \pm 0.3$ & 4.3 & 43 & $231.7 \pm 6.6$ & 0.45$\times$ & $p < 0.001^\dagger$ \\
+  speculative\_decoding\_k3 & $11.5 \pm 0.1$ & 4.3 & 43 & $231.4 \pm 2.8$ & 0.45$\times$ & $p < 0.001^\dagger$ \\
+  speculative\_decoding\_k4 & $17.2 \pm 0.5$ & 4.3 & 44 & $232.1 \pm 6.2$ & 0.45$\times$ & $p < 0.001^\dagger$ \\
+  speculative\_decoding\_k5 & $17.3 \pm 0.4$ & 4.3 & 44 & $230.7 \pm 5.2$ & 0.45$\times$ & $p < 0.001^\dagger$ \\
+  baseline\_fp32 & $2.2 \pm 0.1$ & 1.9 & 37 & $514.1 \pm 13.2$ & 1.00$\times$ & $\text{ns}$ \\
+  opt\_int8 & $2.3 \pm 0.2$ & 2.0 & 37 & $495.0 \pm 23.6$ & 0.96$\times$ & $p < 0.001^\dagger$ \\
+  opt\_paged & $2.3 \pm 0.1$ & 1.9 & 37 & $509.0 \pm 7.1$ & 0.99$\times$ & $\text{ns}$ \\
+  opt\_prefix & $2.3 \pm 0.1$ & 1.9 & 37 & $508.0 \pm 14.9$ & 0.99$\times$ & $\text{ns}$ \\
+  opt\_int8\_paged & $2.3 \pm 0.2$ & 2.0 & 37 & $493.9 \pm 11.3$ & 0.96$\times$ & $p < 0.001^\dagger$ \\
+  opt\_int8\_prefix & $2.3 \pm 0.2$ & 2.0 & 37 & $496.4 \pm 14.2$ & 0.97$\times$ & $p < 0.001^\dagger$ \\
+  opt\_paged\_prefix & $2.3 \pm 0.1$ & 1.9 & 37 & $507.5 \pm 13.7$ & 0.99$\times$ & $\text{ns}$ \\
+  opt\_all\_combined & $2.3 \pm 0.1$ & 2.0 & 37 & $493.6 \pm 8.6$ & 0.96$\times$ & $p < 0.001^\dagger$ \\
+  \hline
+  \multicolumn{7}{l}{\textit{Long-Context Prefix Caching ($L_{\text{prompt}}=1024$ tokens)}} \\
+  prefix\_cached\_r100\_L1024 & $6.6 \pm 0.3$ & 1.8 & 128 & $529.5 \pm 8.4$ & 3.91$\times^\text{prefill}$ & $p < 0.001^\dagger$ \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}

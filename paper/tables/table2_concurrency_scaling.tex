@@ -3,6 +3,7 @@
 \small
 \caption{Throughput and Latency Comparison of Static vs. Continuous Batching under Serving Concurrency ($B \in [1..16]$).}
 \label{tab:concurrency_scaling}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{rrrrr}
 \hline
 \textbf{Batch Size $B$} & \textbf{Static Tok/s} & \textbf{Continuous Tok/s} & \textbf{Static TPOT (ms)} & \textbf{Continuous TPOT (ms)} \\
@@ -13,5 +14,6 @@
   8 & 516.7 & 390.5 & 1.9 & 20.3 \\
   16 & 515.1 & 391.8 & 1.9 & 20.2 \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

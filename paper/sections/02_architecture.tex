@@ -1,0 +1,51 @@
+\section{System Architecture \& Engine Design}
+\label{sec:architecture}
+
+The \textsf{MicroGen} engine is designed around a strictly modular, hardware-decoupled architecture. Unlike traditional serving engines that fuse memory allocation, model execution, and request queuing into monolithic kernels, \textsf{MicroGen} enforces clean abstraction boundaries via abstract protocols. This separation enables independent micro-ablation of serving optimizations without modifying core execution paths.
+
+\subsection{Architectural Decoupling \& Core Protocols}
+\label{sec:arch_protocols}
+
+\textsf{MicroGen} decomposes the LLM serving pipeline into four primary decoupled abstractions:
+
+\begin{enumerate}
+    \item \textbf{Inference Backend (\texttt{InferenceBackend})}: An abstract protocol (\texttt{microgen/backends/base.py}) defining model execution interfaces:
+    \begin{align}
+        &\text{\textsf{load\_model}}(m \in \mathcal{M}, d \in \mathcal{D}) \rightarrow \emptyset \\
+        &\text{\textsf{prefill}}(X_{\text{prompt}}, C_{\text{kv}}) \rightarrow (Y_{\text{logits}}, C_{\text{kv}}') \\
+        &\text{\textsf{decode}}(x_{\text{token}}, C_{\text{kv}}) \rightarrow (y_{\text{logits}}, C_{\text{kv}}')
+    \end{align}
+    Concrete backends include \texttt{PyTorchBackend} (FP32 reference engine), \texttt{ONNXBackend} (ONNX Runtime engine), and \texttt{QuantizedBackend} (INT8 weight-quantized engine).
+
+    \item \textbf{Device Abstraction (\texttt{Device})}: A unified hardware interface (\texttt{microgen/devices/base.py}) handling memory allocation, stream synchronization, and memory footprint queries across heterogeneous targets (\texttt{CPUDevice} and \texttt{CUDADevice}).
+
+    \item \textbf{KV Cache Management (\texttt{KVCache})}: Explicit memory manager handling layer-wise Key and Value tensor storage. \textsf{MicroGen} supports both contiguous baseline allocation (\texttt{SimpleKVCache}) and physical block-paged allocation (\texttt{PagedKVCacheManager}).
+
+    \item \textbf{Continuous Batching Scheduler (\texttt{Scheduler})}: A dynamic admission and step execution controller (\texttt{microgen/scheduler/scheduler.py}) managing request queues, prefill/decode batch construction, and dynamic request entry/exit.
+\end{enumerate}
+
+\subsection{Prefill vs. Decode Step Loop}
+\label{sec:prefill_decode_loop}
+
+To handle the structural execution duality of Transformer models, \textsf{MicroGen} structures inference execution into two decoupled execution steps within the scheduler step loop:
+
+\begin{itemize}
+    \item \textbf{Prefill Step}: When new requests arrive in the waiting queue, the scheduler forms a prefill batch. Prompt tokens $X_{\text{prompt}} \in \mathbb{R}^{B \times L_{\text{prompt}}}$ are processed simultaneously in a single compute-bound forward pass. Key-Value tensors across all Transformer layers $l \in [1..L_{\text{layers}}]$ are computed and saved into assigned cache blocks:
+    \begin{equation}
+        K^{(l)} = X W_K^{(l)}, \quad V^{(l)} = X W_V^{(l)}
+    \end{equation}
+    The first output token $x_1 \sim \text{\textsf{Sample}}(Y_{\text{logits}})$ is sampled, and the request transitions from state \texttt{WAITING} to \texttt{RUNNING}.
+
+    \item \textbf{Decode Step}: For all active requests in state \texttt{RUNNING}, the scheduler constructs a decode batch. A single token $x_t \in \mathbb{R}^{B \times 1}$ per request is passed to the backend. Previously computed KV entries are retrieved from $C_{\text{kv}}$, new single-token KV entries are appended, and self-attention is computed over the sequence context. The generated token $x_{t+1}$ is streamed via SSE or appended to the output buffer until end-of-sequence (\texttt{EOS}) or maximum generation length is reached.
+\end{itemize}
+
+\subsection{Paged KV Memory Allocation Architecture}
+\label{sec:paged_kv_arch}
+
+To mitigate contiguous memory allocation overheads and reduce external fragmentation, \textsf{MicroGen} implements physical block-based Paged KV cache allocation (\texttt{microgen/runtime/paged\_kv.py}). 
+
+The physical memory pool is partitioned into fixed-size physical blocks, where each block stores key and value states for $B_{\text{block}} = 16$ tokens across all layers and attention heads. Each request maintains a virtual-to-physical block table:
+\begin{equation}
+    \mathcal{T}_{\text{block}}(r) = [b_0, b_1, \dots, b_k], \quad b_i \in \text{Physical Block Pool}
+\end{equation}
+When a request requires additional token capacity during decoding, the \texttt{PagedKVCacheManager} dynamically allocates a free block from the global pool without requiring contiguous array reallocation or host-device memory copying. Upon request completion, assigned physical blocks are immediately returned to the free pool.

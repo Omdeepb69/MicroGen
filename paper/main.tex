@@ -1,0 +1,51 @@
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{subcaption}
+\usepackage{cite}
+\usepackage[margin=0.75in]{geometry}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{\textbf{MicroGen: When LLM Inference Optimizations Help---and When They Hurt}\\ \Large An Empirical Study of Latency, Throughput, and Memory Trade-offs}
+
+\author{
+  \textbf{Omdeep Borkar}\\
+  \small Department of Computer Science \& Engineering\\
+  \small \texttt{omdeepborkar@gmail.com}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Large Language Model (LLM) serving frameworks rely on diverse optimizations---including Paged Key-Value (KV) memory allocation, continuous request batching, prefix caching, weight quantization, and speculative decoding---to improve inference throughput and reduce latency. However, state-of-the-art serving engines typically bundle these optimizations into monolithic C++/CUDA frameworks, masking individual performance trade-offs and non-monotonic combinatorial interaction boundaries. In this paper, we present \textsf{MicroGen}, a modular, hardware-aware execution substrate and empirical research framework designed to isolate, benchmark, and analyze LLM serving optimizations under controlled workload, hardware, and measurement conditions. Rather than proposing a production serving engine, \textsf{MicroGen} provides a common modular interface to conduct isolated micro-ablations. Using an $N=30$ statistically verified trial protocol on NVIDIA Tesla T4 GPUs across open transformer architectures (\texttt{sshleifer/tiny-gpt2} and \texttt{gpt2}), we empirically map optimization efficacy regimes. Our findings show that prefix caching achieves up to a \textbf{3.91$\times$ TTFT prefill latency speedup} (reducing TTFT from $25.8 \pm 1.2\text{ ms}$ to $6.6 \pm 0.3\text{ ms}$, $p < 0.001$) under 100\% prompt overlap at $L_{\text{prompt}}=1024$ tokens, while block-paged KV memory eliminates external memory fragmentation ($0.0\%$) under peak load. Crucially, we demonstrate that optimization composition is non-monotonic: combining optimizations (+INT8, +Paged KV, +Prefix Cache) yields a statistically significant throughput regression ($493.6 \pm 8.6\text{ tok/s}$, $0.96\times$ baseline, $p < 0.001$), while full serving stack concurrency drops throughput to $0.76\times$ baseline ($391.8 \pm 6.2\text{ tok/s}$, $p < 0.001$). We release \textsf{MicroGen} open-source to support transparent, data-driven LLM inference systems design.
+\end{abstract}
+
+\input{sections/01_introduction.tex}
+\input{sections/02_architecture.tex}
+\input{sections/03_optimizations.tex}
+\input{sections/04_methodology.tex}
+\input{sections/05_evaluation.tex}
+\input{sections/06_related_work.tex}
+\input{sections/07_discussion.tex}
+\input{sections/08_conclusion.tex}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

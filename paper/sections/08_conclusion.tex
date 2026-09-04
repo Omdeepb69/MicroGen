@@ -1,0 +1,13 @@
+\section{Conclusion \& Future Work}
+\label{sec:conclusion}
+
+In this paper, we presented \textsf{MicroGen}, a modular, hardware-aware execution substrate and empirical research framework designed to isolate, benchmark, and analyze LLM serving optimizations under controlled workload, hardware, and measurement conditions. Rather than proposing a production serving engine competing with monolithic C++ systems, \textsf{MicroGen} provides a clean, protocol-oriented testbed for systematic micro-ablation.
+
+Through an $N=30$ statistically verified trial protocol on NVIDIA Tesla T4 GPUs across open models (\texttt{sshleifer/tiny-gpt2} and \texttt{gpt2}), we empirically mapped optimization efficacy regimes:
+\begin{itemize}
+    \item Hash-based prefix caching achieves up to a \textbf{3.91$\times$ prefill TTFT speedup} (reducing prefill TTFT from $25.8 \pm 1.2\text{ ms}$ to $6.6 \pm 0.3\text{ ms}$, $p < 0.001$) under 100\% prompt overlap at $L_{\text{prompt}}=1024$ tokens.
+    \item Block-paged KV memory allocation completely eliminates external memory fragmentation ($0.0\%$) under dynamic memory pressure regimes, preventing premature Out-of-Memory exceptions.
+    \item We demonstrated that optimization composition is non-monotonic: combining optimizations (+INT8, +Paged KV, +Prefix Cache) yields a statistically significant throughput regression ($493.6 \pm 8.6\text{ tok/s}$, $0.96\times$ baseline, $p < 0.001$), while full serving stack concurrency drops throughput to $0.76\times$ baseline ($391.8 \pm 6.2\text{ tok/s}$, $p < 0.001$).
+\end{itemize}
+
+Future work will expand \textsf{MicroGen} to evaluate FP8/INT4 quantization formats, FlashAttention-3 integration, multi-GPU pipeline parallelism, and hardware execution on emerging TPU and LPU accelerators. We release \textsf{MicroGen} open-source to provide the systems research community with a transparent, reproducible foundation for data-driven LLM serving design.

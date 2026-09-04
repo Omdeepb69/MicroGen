@@ -3,6 +3,7 @@
 \small
 \caption{KV Cache Allocation Resilience under Constrained VRAM Capacity.}
 \label{tab:memory_ablation}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{rrrrr}
 \hline
 \textbf{VRAM Capacity \%} & \textbf{Contiguous Frag \%} & \textbf{Paged Frag \%} & \textbf{Contiguous OOM?} & \textbf{Paged OOM?} \\
@@ -12,5 +13,6 @@
   50\% & 62.1\% & 0.0\% & Yes & No \\
   25\% & 81.4\% & 0.0\% & Yes & No \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

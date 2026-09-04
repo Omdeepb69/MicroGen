@@ -1,0 +1,33 @@
+\section{Related Work}
+\label{sec:related_work}
+
+Optimizing Large Language Model (LLM) serving latency and memory efficiency is a rapidly expanding domain in systems research. \textsf{MicroGen} builds upon and extends several foundational paradigms in LLM inference systems.
+
+\subsection{KV Cache Memory Management}
+\label{sec:rel_memory}
+
+Early serving frameworks allocated static, contiguous Key-Value (KV) cache tensors reserved for maximum sequence lengths ($L_{\text{max}}$), leading to severe internal and external memory fragmentation ($>60\%$)~\cite{kwon2023pagedattention}. Kwon et al. introduced PagedAttention in vLLM, which models KV caches as virtual memory pages allocated non-contiguously in physical GPU memory. SGLang~\cite{zheng2024sglang} extended this concept by implementing RadixAttention for automatic KV cache reuse across prompt prefixes. \textsf{MicroGen} abstracts these allocation mechanisms into explicit \texttt{KVCache} interface contracts (\texttt{SimpleKVCache} vs. \texttt{PagedKVCacheManager}), enabling isolated empirical micro-ablations of paging overheads under identical workload streams.
+
+\subsection{Iteration-Level Scheduling \& Batching}
+\label{sec:rel_scheduling}
+
+Traditional deep learning inference engines employed static request batching, forcing all requests in a batch to wait for the slowest sequence to complete. Orca~\cite{yu2022orca} pioneered iteration-level (continuous) batching, allowing new requests to join at prefill passes and completed requests to leave immediately after \texttt{EOS} emission. Modern engines such as TensorRT-LLM and vLLM combine continuous batching with chunked prefills. \textsf{MicroGen}'s scheduler (\texttt{microgen/scheduler/scheduler.py}) formalizes this step-loop state machine, evaluating continuous batching throughput scaling up to $B=64$ concurrent channels.
+
+\subsection{Quantization \& Model Compression}
+\label{sec:rel_quant}
+
+Post-training quantization reduces weight and activation precision to bypass memory bandwidth bottlenecks in autoregressive decoding. LLM.int8()~\cite{dettmers2022llmint8} introduced vector-wise quantization with outlier isolation, while SmoothQuant~\cite{xiao2023smoothquant} enabled 8-bit weight and activation quantization across transformer layers. AWQ~\cite{lin2023awq} and GPTQ~\cite{frantar2022gptq} further advanced 4-bit weight-only quantization. \textsf{MicroGen} implements per-tensor INT8 weight quantization (\texttt{QuantizedBackend}) to analyze memory footprint compression ($74.2\%$ VRAM reduction) and dequantization compute overheads under low-resource hardware constraints.
+
+\subsection{Speculative Decoding \& Parallel Execution}
+\label{sec:rel_speculative}
+
+Speculative decoding~\cite{chen2023speculative,leviathan2023fast} addresses memory-bandwidth bounds by proposing candidate tokens via a lightweight draft model $\mathcal{M}_{\text{draft}}$ and validating them in parallel using a single target model pass $\mathcal{M}_{\text{target}}$. Medusa~\cite{cai2024medusa} and Eagle~\cite{li2024eagle} extended speculative execution using parameter-free multi-head draft heads. For large-scale distributed inference, Megatron-LM~\cite{shoeybi2019megatron} established intra-node tensor parallelism via column and row matrix partitioning. \textsf{MicroGen} incorporates both speculative verification loops (\texttt{SpeculativeEngine}) and Megatron-style tensor parallel execution (\texttt{ParallelBackend}) to map their exact performance efficacy boundaries empirically.
+
+\input{tables/table0_systems_comparison.tex}
+
+\subsection{Architectural Positioning \& Experimental Isolation}
+\label{sec:rel_positioning}
+
+Table~\ref{tab:systems_comparison} summarizes the feature set and architectural positioning of state-of-the-art serving systems alongside \textsf{MicroGen}. Existing frameworks such as vLLM, SGLang, and TensorRT-LLM are engineered primarily for production serving performance, coupling CUDA kernels, custom memory allocators, and dynamic schedulers inside highly integrated engines. While highly performant for deployment, this architectural coupling makes it challenging to isolate single-variable performance trade-offs or observe negative combinatorial interactions between optimizations.
+
+In contrast, \textsf{MicroGen} is designed explicitly as an \textbf{empirical research substrate}. By enforcing protocol-oriented boundaries (\textsf{InferenceBackend}, \textsf{Device}, \textsf{KVCache}, \textsf{Scheduler}), \textsf{MicroGen} allows researchers to enable, disable, or substitute individual serving optimizations while holding all hardware, workload, and instrumentation variables strictly identical.

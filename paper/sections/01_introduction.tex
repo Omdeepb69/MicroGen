@@ -1,0 +1,48 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Large Language Models (LLMs) based on the Transformer architecture have achieved state-of-the-art performance across automated reasoning, software generation, and conversational interaction. However, serving autoregressive LLMs at low latency and high throughput presents severe computational and memory infrastructure challenges. 
+
+Autoregressive inference inherently exhibits a structural execution duality:
+\begin{enumerate}
+    \item \textbf{Prefill Phase}: Processes input prompt tokens in parallel. Self-attention computation exhibits quadratic complexity $O(N^2)$ with prompt length, although observed end-to-end prefill latency depends on the full model linear projections, feed-forward layers, and attention kernel implementation.
+    \item \textbf{Decode Phase}: Generates tokens sequentially one by one, operating as a memory-bandwidth-dominated workload during single-token autoregressive generation steps.
+\end{enumerate}
+
+To alleviate these computational bottlenecks, recent systems research has introduced diverse serving optimizations, including Paged Key-Value (KV) memory allocation~\cite{kwon2023pagedattention}, continuous request batching~\cite{yu2022orca}, radix-tree prefix caching~\cite{zheng2024sglang}, post-training weight and activation quantization~\cite{dettmers2022llmint8,xiao2023smoothquant}, speculative decoding~\cite{chen2023speculative,leviathan2023fast}, and intra-node tensor parallelism~\cite{shoeybi2019megatron}.
+
+Despite these algorithmic advances, existing inference frameworks typically integrate these optimizations as monolithic, highly coupled sub-systems inside complex C++/CUDA serving engines (e.g., vLLM, TensorRT-LLM, SGLang). Consequently, isolating the individual performance contributions, empirical regime boundaries, memory footprint overheads, and non-monotonic combinatorial interaction effects remains an open challenge for system designers.
+
+To address this gap, we introduce \textbf{MicroGen}\footnote{Our open-source framework and benchmark reproducibility package are available at \url{https://github.com/Omdeepb69/MicroGen}}, a modular, hardware-aware execution substrate and empirical research framework designed specifically to isolate, benchmark, and characterize memory-latency-throughput trade-offs in LLM inference optimizations under controlled hardware, workload, and concurrency regimes. Rather than serving as a production engine competing directly with optimized C++ engines, \textsf{MicroGen} provides a clean, protocol-oriented experimental testbed for systematic micro-ablation.
+
+\subsection{Core Research Questions}
+\label{sec:rqs}
+
+Our empirical study is guided by four core Research Questions (RQs):
+\begin{itemize}
+    \item \textbf{RQ1 (Optimization Efficacy Regimes)}: Under what specific sequence lengths, context depths, and prompt structures do individual inference optimizations (Paged KV, Prefix Caching, INT8 Quantization, Speculative Decoding) yield positive latency speedups versus execution overheads?
+    \item \textbf{RQ2 (Memory/Throughput Trade-offs)}: What are the exact memory footprint trade-offs (allocated vs. reserved VRAM, quantization lifecycle overhead, KV cache block fragmentation) across model parameter scales?
+    \item \textbf{RQ3 (Serving Under Realistic Load)}: How do continuous batching, paged memory allocation, and prefix caching perform under dynamic concurrent request streams ($B \in [1..16]$)?
+    \item \textbf{RQ4 (Optimization Regime Generalization)}: Can empirical measurements characterize global workload regime maps, and do these optimization relationships generalize across distinct model parameter scales and architectures?
+\end{itemize}
+
+\subsection{Key Contributions}
+\label{sec:contributions}
+
+This paper makes the following key contributions:
+\begin{enumerate}
+    \item \textbf{Modular Experimental Substrate}: We design and implement \textsf{MicroGen}, a Python/PyTorch inference research substrate that cleanly decouples execution backends (\textsf{InferenceBackend}), hardware allocators (\textsf{Device}), KV cache managers (\textsf{KVCache}), continuous batching schedulers (\textsf{Scheduler}), and draft-target verification loops (\textsf{SpeculativeEngine}).
+    \item \textbf{Rigorous Benchmark \& Verification Protocol}: We establish a 5-step hardware verification protocol enforcing $N=30$ statistically significant trials, CUDA host-device synchronization, explicit garbage collection, and strictly monotonic microsecond-level latency instrumentation using high-resolution monotonic timers.
+    \item \textbf{Empirical Trade-off \& Regime Characterization}: Based on extensive evaluation on NVIDIA Tesla T4 GPUs across open models (\texttt{sshleifer/tiny-gpt2} and \texttt{gpt2}), we empirically demonstrate:
+    \begin{itemize}
+        \item \textbf{Prefix Caching}: Achieves up to \textbf{3.91$\times$ prefill TTFT speedup} (reducing prefill TTFT from $25.8 \pm 1.2\text{ ms}$ to $6.6 \pm 0.3\text{ ms}$, $p < 0.001$) under 100\% prompt overlap at $L_{\text{prompt}}=1024$ tokens.
+        \item \textbf{Paged KV Allocation}: Eliminates external memory fragmentation ($0.0\%$ fragmentation) under dynamic allocation workloads.
+        \item \textbf{Non-Monotonic Optimization Composition}: We demonstrate that optimization composition is non-monotonic: combining optimizations (+INT8, +Paged KV, +Prefix Cache) yields a statistically significant throughput regression ($493.6 \pm 8.6\text{ tok/s}$, $0.96\times$ baseline, $p < 0.001$), while full serving stack concurrency drops throughput to $0.76\times$ baseline ($391.8 \pm 6.2\text{ tok/s}$, $p < 0.001$).
+    \end{itemize}
+    \item \textbf{Open-Source Research Package}: We release the complete \textsf{MicroGen} codebase, experimental manifests, export pipelines, and reproducibility package to facilitate transparent research in LLM inference systems.
+\end{enumerate}
+
+\subsection{Paper Organization}
+\label{sec:organization}
+
+The remainder of this paper is organized as follows: Section~\ref{sec:architecture} presents the modular architecture of \textsf{MicroGen}. Section~\ref{sec:optimizations} details the mathematical mechanics of our implemented inference optimizations. Section~\ref{sec:methodology} describes our experimental methodology and verification protocol. Section~\ref{sec:evaluation} presents empirical results answering RQ1–RQ4. Section~\ref{sec:related_work} discusses related work, Section~\ref{sec:discussion} analyzes threats to validity and design guidelines, and Section~\ref{sec:conclusion} concludes the paper.

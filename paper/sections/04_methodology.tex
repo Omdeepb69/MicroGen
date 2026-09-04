@@ -1,0 +1,66 @@
+\section{Experimental Methodology \& Verification Protocol}
+\label{sec:methodology}
+
+To ensure academic rigor and reproducibility, all empirical evaluations in \textsf{MicroGen} are governed by a standardized experimental harness (\texttt{benchmarks/harness.py}) and a multi-gate hardware verification protocol.
+
+\subsection{Hardware Target \& Serving Environment}
+\label{sec:meth_hardware}
+
+All benchmark evaluations are executed on an isolated cloud workstation equipped with:
+\begin{itemize}
+    \item \textbf{Accelerator}: NVIDIA Tesla T4 GPU (16 GB GDDR6 VRAM, Turing Architecture, SM 7.5).
+    \item \textbf{Host System}: Intel Xeon CPU @ 2.20 GHz, 13 GB RAM, Linux OS.
+    \item \textbf{Software Stack}: Python 3.12, PyTorch 2.x with CUDA 12.1, Hugging Face Transformers.
+\end{itemize}
+We evaluate open-weights language models across parameter scales, primarily focusing on \texttt{sshleifer/tiny-gpt2} (2.5M parameters) for comprehensive micro-ablations and \texttt{gpt2} (124M parameters) for parameter scaling validation.
+
+\subsection{Workload Generator \& Prompt Distributions}
+\label{sec:meth_workloads}
+
+Workload requests are generated using a deterministic generator (\texttt{benchmarks/workloads.py}) across four structured input/output distributions:
+\begin{enumerate}
+    \item \textbf{Short Context}: Prompt length $L_{\text{in}} \in [32, 128]$, decode length $L_{\text{out}} = 32$.
+    \item \textbf{Medium Context}: Prompt length $L_{\text{in}} \in [256, 512]$, decode length $L_{\text{out}} = 64$.
+    \item \textbf{Long Context}: Prompt length $L_{\text{in}} \in [1024, 2048]$, decode length $L_{\text{out}} = 128$.
+    \item \textbf{Heterogeneous Concurrency}: Dynamically arriving request streams with $B \in [1..64]$ concurrent channels and variable prompt lengths.
+\end{enumerate}
+All workloads use fixed pseudo-random seed initialization to guarantee identical prompt sequence generation across comparative baseline and optimized runs.
+
+\subsection{Rigorous N=30 Statistical Sampling Protocol}
+\label{sec:meth_protocol}
+
+To eliminate transient hardware noise, thermal throttling artifacts, and OS scheduling jitter, \textsf{MicroGen} mandates a strict $N=30$ statistical trial protocol for every experiment record:
+\begin{itemize}
+    \item \textbf{Warmup Phase ($W=5$)}: Executes 5 unrecorded warmup iterations per configuration to trigger PyTorch CUDA JIT kernel compilation, memory allocator initialization, and CUDNN benchmark tuning.
+    \item \textbf{Measurement Phase ($N=30$)}: Executes 30 independent measurement trials per configuration. Statistical metrics reported throughout this paper denote empirical median ($p50$) and 95th percentile ($p95$) values across the $N=30$ samples.
+    \item \textbf{CUDA Stream Synchronization}: Explicit \texttt{torch.cuda.synchronize()} calls are inserted immediately before initiating timers and after model step execution to guarantee asynchronous GPU kernels complete prior to timestamp logging.
+    \item \textbf{Isolated Memory Cleanup}: Between consecutive trial runs, explicit Python garbage collection (\texttt{gc.collect()}) and CUDA memory allocator flushing (\texttt{torch.cuda.empty\_cache()}) are performed to prevent VRAM memory fragmentation leaks across configurations.
+\end{itemize}
+
+\subsection{Monotonic Timing \& Memory Metrics}
+\label{sec:meth_metrics}
+
+All timing instrumentation utilizes Python's high-resolution monotonic timer (\texttt{time.perf\_counter()}) rather than wall-clock time (\texttt{time.time()}), eliminating system clock drift and epoch timestamp corruption:
+\begin{align}
+    \text{\textsf{TTFT}} &= \left(t_{\text{first\_token}} - t_{\text{request\_arrival}}\right) \times 1000 \quad [\text{ms}] \\
+    \text{\textsf{TPOT}} &= \left(\frac{t_{\text{completion}} - t_{\text{first\_token}}}{L_{\text{out}} - 1}\right) \times 1000 \quad [\text{ms/token}] \\
+    \text{\textsf{Decode TPS}} &= \frac{L_{\text{out}} - 1}{t_{\text{completion}} - t_{\text{first\_token}}} \quad [\text{tokens/sec}]
+\end{align}
+
+Memory utilization is tracked using PyTorch CUDA memory APIs:
+\begin{itemize}
+    \item \textbf{Allocated VRAM}: \texttt{torch.cuda.memory\_allocated()}, measuring active tensor storage.
+    \item \textbf{Reserved VRAM}: \texttt{torch.cuda.memory\_reserved()}, measuring total memory claimed by PyTorch's caching allocator.
+\end{itemize}
+
+\subsection{5-Step Verification Gate Protocol}
+\label{sec:meth_verification_gates}
+
+Before generating final paper tables and figures, the experimental pipeline enforces a mandatory 5-step automated verification gate sequence (\texttt{tests/benchmarks/test\_timing\_sanity.py}):
+\begin{enumerate}
+    \item \textbf{Single-Request Monotonic Timing Gate}: Verifies that $0 < \text{TTFT} < 10^5\text{ ms}$ on single prompt requests.
+    \item \textbf{Trial Count Integrity Gate}: Asserts that every experiment record in \texttt{results/raw/experiments.jsonl} contains exactly \texttt{num\_trials\_recorded: 30}.
+    \item \textbf{Concurrency Scaling Sanity Gate}: Verifies that dynamic batch sweeps up to $B=64$ contain 0 NaN/Inf values or negative latency values.
+    \item \textbf{Multi-Model Loader Gate}: Asserts correct model loading across target architectures.
+    \item \textbf{100\% Data-Driven Export Gate}: Asserts that table exporters (\texttt{scripts/export\_paper\_tables.py}) and vector figure generators (\texttt{scripts/generate\_paper\_figures.py}) raise explicit errors if empirical JSONL data is missing, preventing any synthetic fallback generation.
+\end{enumerate}
