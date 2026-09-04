@@ -16,7 +16,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 def test_package_version_consistency():
     assert hasattr(microgen, "__version__")
-    assert microgen.__version__ == "1.0.0"
+    assert microgen.__version__ == "1.0.1"
 
 
 def test_pyproject_toml_exists_and_valid():
@@ -25,7 +25,7 @@ def test_pyproject_toml_exists_and_valid():
 
     content = pyproject_path.read_text()
     assert 'name = "microgen-llm"' in content
-    assert 'version = "1.0.0"' in content
+    assert 'version = "1.0.1"' in content
     assert 'microgen = "microgen.cli.main:main"' in content
 
 

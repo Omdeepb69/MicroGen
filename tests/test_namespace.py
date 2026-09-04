@@ -6,7 +6,7 @@ import microgen
 
 def test_top_level_exports():
     assert hasattr(microgen, "__version__")
-    assert microgen.__version__ == "1.0.0"
+    assert microgen.__version__ == "1.0.1"
     assert hasattr(microgen, "LLMEngine")
     assert hasattr(microgen, "backends")
     assert hasattr(microgen, "memory")
