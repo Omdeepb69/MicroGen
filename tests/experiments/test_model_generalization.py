@@ -20,6 +20,8 @@ def test_evaluate_model_optimization_baseline():
 
     assert "ttft_ms" in metrics
     assert "tpot_ms" in metrics
+    assert "architecture_type" in metrics
+    assert metrics["architecture_type"] == "gpt2"
     assert metrics["model_name"] == "sshleifer/tiny-gpt2"
     assert metrics["optimization"] == "baseline_fp32"
     assert metrics["total_tokens"] > 0
@@ -32,6 +34,8 @@ def test_evaluate_model_optimization_combined():
 
     assert "ttft_ms" in metrics
     assert "tpot_ms" in metrics
+    assert "architecture_type" in metrics
+    assert metrics["architecture_type"] == "gpt2"
     assert metrics["optimization"] == "opt_all_combined"
     assert metrics["total_tokens"] > 0
 

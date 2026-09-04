@@ -117,14 +117,14 @@ def create_continuous_batching_execution_fn(
         
         # Calculate mean TTFT and TPOT across requests
         ttfts = [
-            (r.start_time - r.arrival_time) * 1000.0
+            r.ttft_ms
             for r in completed_requests
-            if r.start_time is not None and r.arrival_time is not None
+            if r.first_token_time is not None or r.start_time is not None
         ]
         tpots = [
-            ((r.finish_time - r.start_time) * 1000.0) / max(1, len(r.generated_token_ids))
+            r.tpot_ms
             for r in completed_requests
-            if r.finish_time is not None and r.start_time is not None
+            if r.finish_time is not None
         ]
 
         mean_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
@@ -144,7 +144,8 @@ def run_batching_concurrency_sweep(
     model_name: str = "sshleifer/tiny-gpt2",
     batch_sizes: Optional[List[int]] = None,
     num_requests: int = 8,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -165,7 +166,7 @@ def run_batching_concurrency_sweep(
             optimization_name=f"static_batching_b{b}",
             baseline_type="microgen_unoptimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -181,7 +182,7 @@ def run_batching_concurrency_sweep(
             optimization_name=f"continuous_batching_b{b}",
             baseline_type="microgen_optimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -195,6 +196,14 @@ def run_batching_concurrency_sweep(
 
 
 if __name__ == "__main__":
-    print("Executing Static vs Continuous Batching Concurrency Sweep...")
-    results = run_batching_concurrency_sweep(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Static vs Continuous Batching Concurrency Sweep (N={trials} trials)...")
+    results = run_batching_concurrency_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Batching concurrency sweep complete! Total experiments recorded: {len(results)}")

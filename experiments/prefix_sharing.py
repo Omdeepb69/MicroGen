@@ -210,7 +210,8 @@ def run_prefix_sharing_sweep(
     prefix_ratios: Optional[List[float]] = None,
     total_prompt_len: int = 256,
     num_requests: int = 5,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -238,7 +239,7 @@ def run_prefix_sharing_sweep(
             optimization_name=f"prefix_uncached_r{ratio_pct}",
             baseline_type="microgen_unoptimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -258,7 +259,7 @@ def run_prefix_sharing_sweep(
             optimization_name=f"prefix_cached_r{ratio_pct}",
             baseline_type="microgen_optimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -276,6 +277,14 @@ def run_prefix_sharing_sweep(
 
 
 if __name__ == "__main__":
-    print("Executing Shared-Prefix Ratio Sweep...")
-    results = run_prefix_sharing_sweep(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Shared-Prefix Ratio Sweep (N={trials} trials)...")
+    results = run_prefix_sharing_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Sweep complete! Total experiments recorded: {len(results)}")

@@ -104,7 +104,8 @@ def run_paged_memory_pressure_sweep(
     model_name: str = "sshleifer/tiny-gpt2",
     capacity_ratios: Optional[List[float]] = None,
     total_requests: int = 16,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -132,7 +133,7 @@ def run_paged_memory_pressure_sweep(
             optimization_name=f"contiguous_memory_p{ratio_pct}",
             baseline_type="microgen_unoptimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -148,7 +149,7 @@ def run_paged_memory_pressure_sweep(
             optimization_name=f"paged_kv_memory_p{ratio_pct}",
             baseline_type="microgen_optimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -162,6 +163,14 @@ def run_paged_memory_pressure_sweep(
 
 
 if __name__ == "__main__":
-    print("Executing Paged KV vs Contiguous Memory Pressure Sweep...")
-    results = run_paged_memory_pressure_sweep(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Paged KV vs Contiguous Memory Pressure Sweep (N={trials} trials)...")
+    results = run_paged_memory_pressure_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Memory pressure sweep complete! Total experiments recorded: {len(results)}")

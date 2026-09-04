@@ -146,7 +146,8 @@ def run_context_length_sweep(
     model_name: str = "sshleifer/tiny-gpt2",
     prompt_lengths: Optional[List[int]] = None,
     output_lengths: Optional[List[int]] = None,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -179,7 +180,7 @@ def run_context_length_sweep(
                 optimization_name=f"hf_baseline_in{l_in}_out{l_out}",
                 baseline_type="hf_pytorch",
                 n_trials=n_trials,
-                warmup_trials=1,
+                warmup_trials=warmup_trials,
                 device=device,
                 output_dir=output_dir,
                 jsonl_filename=jsonl_filename,
@@ -199,7 +200,7 @@ def run_context_length_sweep(
                 optimization_name=f"microgen_unoptimized_in{l_in}_out{l_out}",
                 baseline_type="microgen_unoptimized",
                 n_trials=n_trials,
-                warmup_trials=1,
+                warmup_trials=warmup_trials,
                 device=device,
                 output_dir=output_dir,
                 jsonl_filename=jsonl_filename,
@@ -217,6 +218,14 @@ def run_context_length_sweep(
 
 
 if __name__ == "__main__":
-    print("Executing Context & Output Length Sweep...")
-    results = run_context_length_sweep(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Context & Output Length Sweep (N={trials} trials)...")
+    results = run_context_length_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Sweep complete! Total experiments recorded: {len(results)}")

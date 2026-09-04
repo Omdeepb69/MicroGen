@@ -161,7 +161,8 @@ def create_quantized_execution_fn(
 
 def run_quantization_lifecycle_experiment(
     model_name: str = "sshleifer/tiny-gpt2",
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -178,7 +179,7 @@ def run_quantization_lifecycle_experiment(
         optimization_name="int8_weight_quantization",
         baseline_type="microgen_optimized",
         n_trials=n_trials,
-        warmup_trials=1,
+        warmup_trials=warmup_trials,
         device=device,
         output_dir=output_dir,
         jsonl_filename=jsonl_filename,
@@ -194,7 +195,7 @@ def run_quantization_lifecycle_experiment(
         optimization_name="dynamic_int8_kv_cache",
         baseline_type="microgen_optimized",
         n_trials=n_trials,
-        warmup_trials=1,
+        warmup_trials=warmup_trials,
         device=device,
         output_dir=output_dir,
         jsonl_filename=jsonl_filename,
@@ -208,10 +209,18 @@ def run_quantization_lifecycle_experiment(
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
     print("Executing Quantization Lifecycle & Quality Validation...")
     lifecycle = measure_quantization_lifecycle("sshleifer/tiny-gpt2")
     print("Lifecycle Memory (MB):", lifecycle)
     quality = evaluate_quantization_quality("sshleifer/tiny-gpt2")
     print("Logit Quality:", quality)
-    results = run_quantization_lifecycle_experiment(n_trials=3)
+    results = run_quantization_lifecycle_experiment(n_trials=trials, warmup_trials=warmups)
     print(f"Quantization experiment suite complete! Total experiments recorded: {len(results)}")

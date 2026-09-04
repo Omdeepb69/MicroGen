@@ -39,14 +39,53 @@ def compute_percentile(data: List[float], percentile: float) -> float:
 
 
 def compute_stats(values: List[float]) -> Dict[str, float]:
-    """Computes p50, p90, p95, and p99 percentiles for a metric."""
+    """Computes mean, std, min, max, iqr, and percentiles (p50, p90, p95, p99) for a list of values."""
+    if not values:
+        return {
+            "p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0,
+            "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "iqr": 0.0,
+        }
+    
+    n = len(values)
+    mean_val = sum(values) / n
+    variance = sum((x - mean_val) ** 2 for x in values) / (n - 1) if n > 1 else 0.0
+    std_val = math.sqrt(variance)
+    
+    p25 = compute_percentile(values, 25.0)
+    p75 = compute_percentile(values, 75.0)
+    
     return {
         "p50": compute_percentile(values, 50.0),
         "p90": compute_percentile(values, 90.0),
         "p95": compute_percentile(values, 95.0),
         "p99": compute_percentile(values, 99.0),
-        "mean": sum(values) / len(values) if values else 0.0,
+        "mean": mean_val,
+        "std": std_val,
+        "min": min(values),
+        "max": max(values),
+        "iqr": max(0.0, p75 - p25),
     }
+
+
+def compute_paired_p_value(sample_a: List[float], sample_b: List[float]) -> float:
+    """Computes paired two-sided Wilcoxon signed-rank test p-value (or fallback paired t-test)."""
+    if len(sample_a) != len(sample_b) or len(sample_a) < 2:
+        return 1.0
+    try:
+        import scipy.stats as stats
+        # Check if all paired differences are zero
+        diffs = [a - b for a, b in zip(sample_a, sample_b)]
+        if all(abs(d) < 1e-9 for d in diffs):
+            return 1.0
+        _, p_val = stats.wilcoxon(sample_a, sample_b)
+        return float(p_val)
+    except Exception:
+        try:
+            import scipy.stats as stats
+            _, p_val = stats.ttest_rel(sample_a, sample_b)
+            return float(p_val)
+        except Exception:
+            return 1.0
 
 
 def reset_environment() -> None:
@@ -97,6 +136,7 @@ class TrialResult:
     generated_tokens: int
     peak_allocated_mb: float
     peak_reserved_mb: float
+    acceptance_rate: float = 1.0
 
 
 @dataclass
@@ -111,6 +151,7 @@ class ExperimentResult:
     throughput_stats_tps: Dict[str, float]
     peak_allocated_mb_stats: Dict[str, float]
     peak_reserved_mb_stats: Dict[str, float]
+    acceptance_rate_stats: Dict[str, float] = field(default_factory=dict)
 
     def to_json_dict(self) -> Dict[str, Any]:
         """Converts experiment result to JSON-serializable dictionary."""
@@ -123,6 +164,7 @@ class ExperimentResult:
             "throughput_stats_tps": self.throughput_stats_tps,
             "peak_allocated_mb_stats": self.peak_allocated_mb_stats,
             "peak_reserved_mb_stats": self.peak_reserved_mb_stats,
+            "acceptance_rate_stats": self.acceptance_rate_stats,
             "num_trials_recorded": len(self.trials),
             "trials": [asdict(t) for t in self.trials],
         }
@@ -188,6 +230,7 @@ class ExperimentHarness:
             tpot_ms = float(metrics.get("tpot_ms", 0.0))
             gen_tokens = int(metrics.get("generated_tokens", 1))
             tot_latency_ms = float(metrics.get("total_latency_ms", (t1 - t0) * 1000.0))
+            acc_rate = float(metrics.get("acceptance_rate", 1.0))
 
             tps = (gen_tokens / (tot_latency_ms / 1000.0)) if tot_latency_ms > 0 else 0.0
 
@@ -200,6 +243,7 @@ class ExperimentHarness:
                 generated_tokens=gen_tokens,
                 peak_allocated_mb=peak_alloc_bytes / (1024 * 1024),
                 peak_reserved_mb=peak_res_bytes / (1024 * 1024),
+                acceptance_rate=acc_rate,
             )
             trial_results.append(trial_res)
 
@@ -209,6 +253,7 @@ class ExperimentHarness:
         tps_vals = [t.tokens_per_sec for t in trial_results]
         alloc_vals = [t.peak_allocated_mb for t in trial_results]
         res_vals = [t.peak_reserved_mb for t in trial_results]
+        acc_vals = [t.acceptance_rate for t in trial_results]
 
         result = ExperimentResult(
             config=self.config,
@@ -220,6 +265,7 @@ class ExperimentHarness:
             throughput_stats_tps=compute_stats(tps_vals),
             peak_allocated_mb_stats=compute_stats(alloc_vals),
             peak_reserved_mb_stats=compute_stats(res_vals),
+            acceptance_rate_stats=compute_stats(acc_vals),
         )
 
         # 4. Stream record to JSONL log

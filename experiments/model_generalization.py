@@ -98,9 +98,13 @@ def evaluate_model_optimization(
 
     t1_end = time.perf_counter()
     num_reqs = len(workload.requests)
+    arch_type = "unknown"
+    if backend.model is not None and hasattr(backend.model, "config"):
+        arch_type = getattr(backend.model.config, "model_type", "unknown")
 
     return {
         "model_name": model_name,
+        "architecture_type": arch_type,
         "optimization": optimization,
         "ttft_ms": total_ttft_ms / max(1, num_reqs),
         "tpot_ms": total_tpot_ms / max(1, num_reqs),
@@ -113,7 +117,8 @@ def run_model_generalization_experiment(
     models: Optional[List[str]] = None,
     optimizations: Optional[List[str]] = None,
     num_requests: int = 4,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -128,41 +133,53 @@ def run_model_generalization_experiment(
     results: List[ExperimentResult] = []
 
     for model_name in models:
-        generator = WorkloadGenerator(tokenizer_name_or_path=model_name)
-        workload = generator.generate_shared_prefix_workload(
-            num_requests=num_requests,
-            total_prompt_len=128,
-            prefix_ratio=0.5,
-            max_new_tokens=16,
-            seed=42,
-        )
+        try:
+            generator = WorkloadGenerator(tokenizer_name_or_path=model_name)
+            workload = generator.generate_shared_prefix_workload(
+                num_requests=num_requests,
+                total_prompt_len=128,
+                prefix_ratio=0.5,
+                max_new_tokens=16,
+                seed=42,
+            )
 
-        for opt in optimizations:
-            baseline_type = "microgen_unoptimized" if opt == "baseline_fp32" else "microgen_optimized"
-            config = ExperimentConfig(
-                model_name=model_name,
-                optimization_name=f"gen_{opt}",
-                baseline_type=baseline_type,
-                n_trials=n_trials,
-                warmup_trials=1,
-                device=device,
-                output_dir=output_dir,
-                jsonl_filename=jsonl_filename,
-            )
-            harness = ExperimentHarness(config)
-            fn = lambda m=model_name, o=opt: evaluate_model_optimization(
-                model_name=m,
-                workload=workload,
-                optimization=o,
-                device_str=device,
-            )
-            res = harness.run_experiment(f"generalization_{opt}", len(workload.requests), fn)
-            results.append(res)
+            for opt in optimizations:
+                baseline_type = "microgen_unoptimized" if opt == "baseline_fp32" else "microgen_optimized"
+                config = ExperimentConfig(
+                    model_name=model_name,
+                    optimization_name=f"gen_{opt}",
+                    baseline_type=baseline_type,
+                    n_trials=n_trials,
+                    warmup_trials=warmup_trials,
+                    device=device,
+                    output_dir=output_dir,
+                    jsonl_filename=jsonl_filename,
+                )
+                harness = ExperimentHarness(config)
+                fn = lambda m=model_name, o=opt: evaluate_model_optimization(
+                    model_name=m,
+                    workload=workload,
+                    optimization=o,
+                    device_str=device,
+                )
+                res = harness.run_experiment(f"generalization_{opt}", len(workload.requests), fn)
+                results.append(res)
+        except Exception as err:
+            print(f"[Warning] Model generalization sweep skipped '{model_name}': {err}")
+            continue
 
     return results
 
 
 if __name__ == "__main__":
-    print("Executing Popular Architecture Generalization Experiment...")
-    results = run_model_generalization_experiment(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Popular Architecture Generalization Experiment (N={trials} trials)...")
+    results = run_model_generalization_experiment(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Generalization experiment complete! Total experiments recorded: {len(results)}")

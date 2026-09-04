@@ -137,7 +137,8 @@ def run_speculative_sweep(
     target_model_name: str = "sshleifer/tiny-gpt2",
     draft_lengths: Optional[List[int]] = None,
     num_requests: int = 3,
-    n_trials: int = 5,
+    n_trials: int = 30,
+    warmup_trials: int = 5,
     device: str = "cpu",
     output_dir: str = "results/raw",
     jsonl_filename: str = "experiments.jsonl",
@@ -157,7 +158,7 @@ def run_speculative_sweep(
         optimization_name="target_only_baseline",
         baseline_type="microgen_unoptimized",
         n_trials=n_trials,
-        warmup_trials=1,
+        warmup_trials=warmup_trials,
         device=device,
         output_dir=output_dir,
         jsonl_filename=jsonl_filename,
@@ -174,7 +175,7 @@ def run_speculative_sweep(
             optimization_name=f"speculative_decoding_k{k}",
             baseline_type="microgen_optimized",
             n_trials=n_trials,
-            warmup_trials=1,
+            warmup_trials=warmup_trials,
             device=device,
             output_dir=output_dir,
             jsonl_filename=jsonl_filename,
@@ -194,6 +195,14 @@ def run_speculative_sweep(
 
 
 if __name__ == "__main__":
-    print("Executing Speculative Decoding Acceptance & Speedup Sweep...")
-    results = run_speculative_sweep(n_trials=3, device="cpu")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--n-trials", type=int, default=None)
+    args = parser.parse_args()
+    trials = args.n_trials if args.n_trials is not None else (3 if args.quick else 30)
+    warmups = 1 if args.quick else 5
+
+    print(f"Executing Speculative Decoding Acceptance & Speedup Sweep (N={trials} trials)...")
+    results = run_speculative_sweep(n_trials=trials, warmup_trials=warmups, device="cpu")
     print(f"Speculative sweep complete! Total experiments recorded: {len(results)}")
