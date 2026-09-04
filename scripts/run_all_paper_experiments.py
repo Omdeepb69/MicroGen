@@ -19,12 +19,45 @@ EXPERIMENT_SCRIPTS = [
 ]
 
 
+def pre_download_models() -> None:
+    """Pre-downloads required models into local HF cache and enables offline mode to avoid HF API 429 rate limits."""
+    models = ["sshleifer/tiny-gpt2"]
+    
+    # Retrieve Kaggle secret HF_TOKEN_READ if available
+    try:
+        from kaggle_secrets import UserSecretsClient
+        user_secrets = UserSecretsClient()
+        hf_token = user_secrets.get_secret("HF_TOKEN_READ")
+        os.environ["HF_TOKEN"] = hf_token
+        print("[+] Set HF_TOKEN from Kaggle UserSecretsClient.")
+    except Exception:
+        pass
+
+    print("[+] Pre-downloading models to local HuggingFace cache...")
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    for m in models:
+        try:
+            AutoTokenizer.from_pretrained(m)
+            AutoModelForCausalLM.from_pretrained(m)
+            print(f"  - Downloaded and cached: {m}")
+        except Exception as e:
+            print(f"  - Warning pre-downloading {m}: {e}")
+
+    # Set offline mode for all subsequent sub-processes
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    print("[+] Offline mode enabled (HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1). All sub-experiments will run 100% offline from local cache.")
+
+
 def run_suite(quick: bool = False) -> None:
     """Execute all experiment scripts in sequence to populate results/raw/experiments.jsonl."""
     print("================================================================================")
     print("      MICROGEN MASTER EMPIRICAL EXPERIMENT SUITE EXECUTION")
     print("================================================================================")
     
+    # Pre-download models and enforce offline execution mode to eliminate HF Hub 429 errors
+    pre_download_models()
+
     # Ensure fresh output directory structure
     os.makedirs("results/raw", exist_ok=True)
     raw_jsonl = "results/raw/experiments.jsonl"
@@ -43,6 +76,10 @@ def run_suite(quick: bool = False) -> None:
     env["TRANSFORMERS_VERBOSITY"] = "error"
     env["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
+    env["HF_HUB_OFFLINE"] = "1"
+    env["TRANSFORMERS_OFFLINE"] = "1"
+    if "HF_TOKEN" in os.environ:
+        env["HF_TOKEN"] = os.environ["HF_TOKEN"]
 
     for script in EXPERIMENT_SCRIPTS:
         if not os.path.exists(script):

@@ -24,6 +24,14 @@ os.environ["TQDM_DISABLE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["PYTHONUNBUFFERED"] = "1"
+
+try:
+    from kaggle_secrets import UserSecretsClient
+    user_secrets = UserSecretsClient()
+    hf_token = user_secrets.get_secret("HF_TOKEN_READ")
+    os.environ["HF_TOKEN"] = hf_token
+except Exception:
+        pass
 from typing import Dict, Any, List, Tuple, Optional
 
 from microgen.devices import get_device, Device
