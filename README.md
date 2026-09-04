@@ -12,9 +12,11 @@
 
 ## 📌 Short Description (For GitHub Repository)
 
-> **MicroGen**: A modular, production-grade PyTorch LLM inference engine featuring Continuous Batching, Paged & Quantized INT8 KV Cache, Multi-GPU Tensor Parallelism, Speculative Decoding, and OpenAI-compatible SSE streaming API.
+> **MicroGen**: A modular PyTorch LLM inference engine and research testbed featuring Continuous Batching, Paged & Quantized INT8 KV Cache, Multi-GPU Tensor Parallelism, Speculative Decoding, and OpenAI-compatible SSE streaming API.
 
 **Topics/Tags for GitHub:** `llm-inference`, `pytorch`, `kv-cache`, `continuous-batching`, `paged-attention`, `tensor-parallelism`, `quantization`, `speculative-decoding`, `fastapi`, `cuda`.
+
+> **Note on Measurement Scope & Serving Layer**: Beyond the empirical benchmarking substrate described in the paper, MicroGen includes a working OpenAI-compatible HTTP serving layer (`microgen/api/` with FastAPI, SSE streaming, and 73 passing unit/integration tests) for practical use. The paper's $N=30$ throughput/latency figures reflect direct in-process engine-level measurement (isolating model, memory, and kernel dynamics), whereas end-to-end HTTP socket and ASGI network-layer load testing represents an ongoing research extension.
 
 ---
 
