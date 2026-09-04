@@ -34,11 +34,15 @@ def run_suite(quick: bool = False) -> None:
 
     flag = ["--quick"] if quick else []
 
-    # Configure PYTHONPATH to include current root directory
+    # Configure PYTHONPATH to include current root directory and suppress progress bar pipe deadlocks
     env = os.environ.copy()
     cwd = os.getcwd()
     existing_ppath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = f"{cwd}:{existing_ppath}" if existing_ppath else cwd
+    env["TQDM_DISABLE"] = "1"
+    env["TRANSFORMERS_VERBOSITY"] = "error"
+    env["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
 
     for script in EXPERIMENT_SCRIPTS:
         if not os.path.exists(script):

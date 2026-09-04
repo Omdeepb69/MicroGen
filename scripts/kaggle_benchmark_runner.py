@@ -19,6 +19,11 @@ import json
 import numpy as np
 import argparse
 import torch
+
+os.environ["TQDM_DISABLE"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["PYTHONUNBUFFERED"] = "1"
 from typing import Dict, Any, List, Tuple, Optional
 
 from microgen.devices import get_device, Device
