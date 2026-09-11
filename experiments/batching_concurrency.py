@@ -115,6 +115,9 @@ def create_continuous_batching_execution_fn(
         tot_latency_ms = (t1_end - t0_start) * 1000.0
         total_gen_tokens = sum(len(r.generated_token_ids) for r in completed_requests)
         
+        # Extract scheduler profiling breakdown
+        profile_breakdown = scheduler.get_profile_breakdown()
+
         # Calculate mean TTFT and TPOT across requests
         ttfts = [
             r.ttft_ms
@@ -135,6 +138,11 @@ def create_continuous_batching_execution_fn(
             "tpot_ms": mean_tpot,
             "generated_tokens": total_gen_tokens,
             "total_latency_ms": tot_latency_ms,
+            "scheduler_queue_pop_ms": profile_breakdown["queue_pop_ms"],
+            "scheduler_kv_manage_ms": profile_breakdown["kv_manage_ms"],
+            "scheduler_backend_cuda_ms": profile_breakdown["backend_cuda_ms"],
+            "scheduler_python_loop_ms": profile_breakdown["python_loop_ms"],
+            "scheduler_overhead_ratio": profile_breakdown["scheduler_overhead_ratio"],
         }
 
     return execution_fn

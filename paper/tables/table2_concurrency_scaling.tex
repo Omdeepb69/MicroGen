@@ -1,7 +1,7 @@
 \begin{table}[htbp]
 \centering
 \small
-\caption{Throughput and Latency Comparison of Static vs. Continuous Batching under Serving Concurrency ($B \in [1..16]$).}
+\caption{Throughput and Latency Comparison of Static vs. Continuous Batching under Serving Concurrency ($B \in \{1..16\}$). Continuous batching TTFT reflects end-to-end latency including scheduler admission and queue registration, whereas static TTFT measures unqueued direct inference prefill.}
 \label{tab:concurrency_scaling}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{rrrrr}

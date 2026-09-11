@@ -39,17 +39,20 @@ def compute_percentile(data: List[float], percentile: float) -> float:
 
 
 def compute_stats(values: List[float]) -> Dict[str, float]:
-    """Computes mean, std, min, max, iqr, and percentiles (p50, p90, p95, p99) for a list of values."""
+    """Computes mean, std, min, max, iqr, se, 95% CIs, and percentiles (p50, p90, p95, p99) for a list of values."""
     if not values:
         return {
             "p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0,
             "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "iqr": 0.0,
+            "se": 0.0, "ci95_lower": 0.0, "ci95_upper": 0.0,
         }
     
     n = len(values)
     mean_val = sum(values) / n
     variance = sum((x - mean_val) ** 2 for x in values) / (n - 1) if n > 1 else 0.0
     std_val = math.sqrt(variance)
+    se_val = std_val / math.sqrt(n) if n > 0 else 0.0
+    margin_error = 1.96 * se_val
     
     p25 = compute_percentile(values, 25.0)
     p75 = compute_percentile(values, 75.0)
@@ -64,7 +67,57 @@ def compute_stats(values: List[float]) -> Dict[str, float]:
         "min": min(values),
         "max": max(values),
         "iqr": max(0.0, p75 - p25),
+        "se": se_val,
+        "ci95_lower": mean_val - margin_error,
+        "ci95_upper": mean_val + margin_error,
     }
+
+
+def compute_cohens_d(m1: float, s1: float, n1: int, m2: float, s2: float, n2: int) -> float:
+    """Computes Cohen's d effect size between two sample distributions."""
+    if n1 <= 1 or n2 <= 1:
+        return 0.0
+    s_pooled_sq = (((n1 - 1) * (s1 ** 2)) + ((n2 - 1) * (s2 ** 2))) / (n1 + n2 - 2)
+    if s_pooled_sq <= 0:
+        return 0.0
+    return (m1 - m2) / math.sqrt(s_pooled_sq)
+
+
+def adjusted_p_values_holm_bonferroni(p_values: List[float]) -> List[float]:
+    """
+    Applies Holm-Bonferroni Family-Wise Error Rate (FWER) adjustment to a list of p-values.
+    Returns adjusted p-values bounded by [0.0, 1.0] preserving original index order.
+    """
+    m = len(p_values)
+    if m == 0:
+        return []
+    
+    indexed_p = sorted(enumerate(p_values), key=lambda x: x[1])
+    adj_p = [0.0] * m
+    
+    cum_max = 0.0
+    for rank, (orig_idx, p_val) in enumerate(indexed_p):
+        multiplier = m - rank
+        val = min(1.0, max(0.0, p_val * multiplier))
+        cum_max = max(cum_max, val)
+        adj_p[orig_idx] = cum_max
+        
+    return adj_p
+
+
+def compute_paired_ttest(sample_a: List[float], sample_b: List[float]) -> float:
+    """Computes paired two-sided Student's t-test p-value for matched baseline-vs-treatment trials."""
+    if len(sample_a) != len(sample_b) or len(sample_a) < 2:
+        return 1.0
+    try:
+        import scipy.stats as stats
+        diffs = [a - b for a, b in zip(sample_a, sample_b)]
+        if all(abs(d) < 1e-9 for d in diffs):
+            return 1.0
+        _, p_val = stats.ttest_rel(sample_a, sample_b)
+        return float(p_val)
+    except Exception:
+        return 1.0
 
 
 def compute_paired_p_value(sample_a: List[float], sample_b: List[float]) -> float:
@@ -73,19 +126,14 @@ def compute_paired_p_value(sample_a: List[float], sample_b: List[float]) -> floa
         return 1.0
     try:
         import scipy.stats as stats
-        # Check if all paired differences are zero
         diffs = [a - b for a, b in zip(sample_a, sample_b)]
         if all(abs(d) < 1e-9 for d in diffs):
             return 1.0
         _, p_val = stats.wilcoxon(sample_a, sample_b)
         return float(p_val)
     except Exception:
-        try:
-            import scipy.stats as stats
-            _, p_val = stats.ttest_rel(sample_a, sample_b)
-            return float(p_val)
-        except Exception:
-            return 1.0
+        return compute_paired_ttest(sample_a, sample_b)
+
 
 
 def reset_environment() -> None:

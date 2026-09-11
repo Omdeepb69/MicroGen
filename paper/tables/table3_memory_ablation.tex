@@ -1,12 +1,12 @@
 \begin{table}[htbp]
 \centering
 \small
-\caption{KV Cache Allocation Resilience under Constrained VRAM Capacity. Contiguous fragmentation is measured at peak allocation immediately prior to Out-of-Memory (OOM) sequence allocation failure.}
+\caption{KV Cache Allocation Resilience under Constrained VRAM Capacity. External allocation fragmentation ($F_{\text{ext}} = 1 - \frac{\text{max contiguous block}}{\text{total free VRAM}}$) is measured at peak allocation immediately prior to Out-of-Memory (OOM) sequence allocation failure.}
 \label{tab:memory_ablation}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{rrrrr}
 \hline
-\textbf{VRAM Capacity \%} & \textbf{Contiguous Frag \%} & \textbf{Paged Frag \%} & \textbf{Contiguous OOM?} & \textbf{Paged OOM?} \\
+\textbf{VRAM Capacity \%} & \textbf{Contiguous Frag \% ($F_{\text{ext}}$)} & \textbf{Paged Frag \% ($F_{\text{ext}}$)} & \textbf{Contiguous OOM?} & \textbf{Paged OOM?} \\
 \hline
   100\% & 35.2\% & 0.0\% & No & No \\
   75\% & 48.6\% & 0.0\% & No & No \\

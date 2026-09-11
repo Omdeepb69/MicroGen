@@ -22,19 +22,31 @@ Workload requests are generated using a deterministic generator (\texttt{benchma
     \item \textbf{Short Context}: Prompt length $L_{\text{in}} \in [32, 128]$, decode length $L_{\text{out}} = 32$.
     \item \textbf{Medium Context}: Prompt length $L_{\text{in}} \in [256, 512]$, decode length $L_{\text{out}} = 64$.
     \item \textbf{Long Context}: Prompt length $L_{\text{in}} \in [1024, 2048]$, decode length $L_{\text{out}} = 128$.
-    \item \textbf{Heterogeneous Concurrency}: Dynamically arriving request streams with $B \in [1..64]$ concurrent channels and variable prompt lengths.
+    \item \textbf{Heterogeneous Concurrency}: Dynamically arriving request streams with $B \in [1..64]$ concurrent channels and variable prompt lengths. The workload generator supports concurrency levels up to $B=64$; reported continuous-batching evaluations cover $B \in \{1, 2, 4, 8, 16\}$.
 \end{enumerate}
 All workloads use fixed pseudo-random seed initialization to guarantee identical prompt sequence generation across comparative baseline and optimized runs.
 
-\subsection{Rigorous N=30 Statistical Sampling Protocol}
+\subsection{Rigorous N=30 Repeated-Trial Evaluation Protocol}
 \label{sec:meth_protocol}
 
-To eliminate transient hardware noise, thermal throttling artifacts, and OS scheduling jitter, \textsf{MicroGen} mandates a strict $N=30$ statistical trial protocol for every experiment record:
+To eliminate transient hardware noise, thermal throttling artifacts, and OS scheduling jitter, \textsf{MicroGen} mandates a strict $N=30$ repeated-trial evaluation protocol for every experiment record:
 \begin{itemize}
     \item \textbf{Warmup Phase ($W=5$)}: Executes 5 unrecorded warmup iterations per configuration to trigger PyTorch CUDA JIT kernel compilation, memory allocator initialization, and CUDNN benchmark tuning.
-    \item \textbf{Measurement Phase ($N=30$)}: Executes 30 independent measurement trials per configuration. Statistical metrics reported throughout this paper denote empirical median ($p50$) and 95th percentile ($p95$) values across the $N=30$ samples.
+    \item \textbf{Measurement Phase ($N=30$)}: Executes 30 independent measurement trials per configuration. Each configuration is evaluated for 30 measurement trials using the identical workload seed and sequence order as its matched baseline control. Statistical metrics reported throughout this paper denote empirical mean ($\mu$), sample standard deviation ($\sigma$), 95\% Confidence Intervals ($\mu \pm 1.96 \cdot \text{SE}$), median ($p50$), and 95th percentile ($p95$) values across the $N=30$ samples.
     \item \textbf{CUDA Stream Synchronization}: Explicit \texttt{torch.cuda.synchronize()} calls are inserted immediately before initiating timers and after model step execution to guarantee asynchronous GPU kernels complete prior to timestamp logging.
     \item \textbf{Isolated Memory Cleanup}: Between consecutive trial runs, explicit Python garbage collection (\texttt{gc.collect()}) and CUDA memory allocator flushing (\texttt{torch.cuda.empty\_cache()}) are performed to prevent VRAM memory fragmentation leaks across configurations.
+\end{itemize}
+
+\subsection{Statistical Significance \& Hypothesis Testing Framework}
+\label{sec:meth_stats_testing}
+
+To formally evaluate whether observed performance differences are statistically significant, we establish a paired hypothesis testing framework:
+\begin{itemize}
+    \item \textbf{Null Hypothesis ($H_0$)}: The mean performance metric of the optimized configuration $\mu_{\text{opt}}$ equals the matched baseline control performance metric $\mu_{\text{base}}$ ($H_0: \mu_{\text{opt}} = \mu_{\text{base}}$).
+    \item \textbf{Alternative Hypothesis ($H_1$)}: The mean performance metric differs significantly ($H_1: \mu_{\text{opt}} \neq \mu_{\text{base}}$), evaluated via a two-sided paired Student's $t$-test (\texttt{scipy.stats.ttest\_rel}) for matched trial pairs sharing identical workload seeds.
+    \item \textbf{Multiple-Comparison Correction}: When performing micro-ablation sweeps across multi-configuration matrices, we apply the Holm--Bonferroni procedure to adjust raw $p$-values and maintain the Family-Wise Error Rate (FWER) at $\alpha = 0.05$. Adjusted $p$-values are reported as $p_{\text{adj}}$.
+    \item \textbf{Effect Size Measurement}: We compute Cohen's $d$ effect sizes ($d = \frac{\mu_{\text{opt}} - \mu_{\text{base}}}{s_{\text{pooled}}}$) to quantify the standardized magnitude of performance differences independently of sample size.
+    \item \textbf{Confirmatory vs. Exploratory Evaluation}: We distinguish pre-specified confirmatory hypothesis comparisons (e.g., prefix cache TTFT prefill speedup, non-monotonic composition regression ladder) from exploratory parameter grid sweeps.
 \end{itemize}
 
 \subsection{Monotonic Timing \& Memory Metrics}

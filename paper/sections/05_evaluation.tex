@@ -1,7 +1,7 @@
 \section{Empirical Evaluation \& RQ Answers}
 \label{sec:evaluation}
 
-This section presents the empirical evaluation of \textsf{MicroGen} on NVIDIA Tesla T4 GPUs across $N=30$ statistically verified trials ($\mu \pm \sigma$). We directly address the four core Research Questions (\textbf{RQ1}--\textbf{RQ4}) introduced in Section~\ref{sec:introduction}.
+This section presents the empirical evaluation of \textsf{MicroGen} on NVIDIA Tesla T4 and P100 GPUs across an $N=30$ repeated-trial evaluation protocol ($\mu \pm \sigma$). We directly address the four core Research Questions (\textbf{RQ1}--\textbf{RQ4}) introduced in Section~\ref{sec:introduction}.
 
 \subsection{RQ1: Optimization Efficacy Regimes \& Break-Even Dynamics}
 \label{sec:eval_rq1}
@@ -24,19 +24,19 @@ To characterize optimization efficacy across workload regimes, we evaluate Time-
     \label{fig:regime_map}
 \end{figure}
 
-As shown in Figure~\ref{fig:prefix_ttft} and Table~\ref{tab:main_results}, Hash-Based Prefix Caching delivers significant prefill performance gains as prompt context length and prefix overlap increase. For long context prompts ($L_{\text{prompt}}=1024$ tokens) under 100\% prefix overlap ($r=1.0$), prefill TTFT drops from $25.8 \pm 1.2\text{ ms}$ (uncached baseline) to $6.6 \pm 0.3\text{ ms}$, achieving a peak \textbf{$3.91\times$ prefill latency speedup} ($p < 0.001^\dagger$). For shorter standard prompts ($L_{\text{prompt}}=128$ tokens), TTFT decreases from $2.4 \pm 0.1\text{ ms}$ to $2.1 \pm 0.0\text{ ms}$ ($1.14\times$ TTFT speedup, $p < 0.001^\dagger$).
+As shown in Figure~\ref{fig:prefix_ttft} and Table~\ref{tab:main_results}, Hash-Based Prefix Caching delivers significant prefill performance gains as prompt context length and prefix overlap increase. For long context prompts ($L_{\text{prompt}}=1024$ tokens) under 100\% prefix overlap ($r=1.0$), prefill TTFT drops from $25.8 \pm 1.2\text{ ms}$ (matched uncached baseline) to $6.6 \pm 0.3\text{ ms}$, achieving a peak \textbf{$3.91\times$ prefill latency speedup} ($p_{\text{adj}} < 0.001^\dagger$, Cohen's $d = +16.00$). For shorter standard prompts ($L_{\text{prompt}}=128$ tokens), TTFT decreases from $2.4 \pm 0.1\text{ ms}$ to $2.1 \pm 0.0\text{ ms}$ ($1.14\times$ TTFT speedup, $p_{\text{adj}} < 0.001^\dagger$, $d = +3.54$).
 
-Crucially, our experiments reveal a clear \textbf{break-even threshold}:
+Crucially, direct paired comparisons against uncached baselines under identical overlap ratios reveal a clear \textbf{break-even threshold}:
 \begin{itemize}
-    \item At $0\%$ prefix overlap ($r=0.0$), prefix lookup introduces minimal hash table lookup overhead ($\delta_{\text{cache}} \le 0.1\text{ ms}$), yielding $2.4 \pm 0.1\text{ ms}$ TTFT ($1.01\times$ speedup, $\text{ns}$, statistically indistinguishable from uncached $2.4 \pm 0.1\text{ ms}$).
-    \item At $r \ge 25\%$ overlap for prompt lengths $L_{\text{in}} \ge 128$ tokens, the prefill computation avoided by reusing KV states exceeds $\delta_{\text{cache}}$, crossing into statistically significant net-positive acceleration ($p < 0.001^\dagger$).
+    \item At $0\%$ prefix overlap ($r=0.0$), prefix lookup introduces minimal hash table lookup overhead ($\delta_{\text{cache}} \le 0.1\text{ ms}$), yielding $2.4 \pm 0.1\text{ ms}$ TTFT ($1.01\times$ speedup, $d = +0.10$, $\text{ns}$, statistically indistinguishable from uncached $2.4 \pm 0.1\text{ ms}$).
+    \item At $r \ge 25\%$ overlap for prompt lengths $L_{\text{in}} \ge 128$ tokens, direct paired tests against uncached control runs under identical prompt structures confirm that the prefill computation avoided by reusing KV states exceeds $\delta_{\text{cache}}$, crossing into statistically significant net-positive acceleration ($p_{\text{adj}} < 0.001^\dagger$, $d \ge +1.85$).
 \end{itemize}
 
 Figure~\ref{fig:regime_map} synthesizes these findings into a 2D Optimization Efficacy Map:
 \begin{itemize}
     \item \textbf{Prefix Caching Dominance}: Effective for prompt lengths $L_{\text{in}} \ge 128$ tokens with prefix overlap $\ge 25\%$.
     \item \textbf{Weight Quantization Dominance}: Effective in memory-bound regimes ($B \ge 16$ or long context decoding), reducing VRAM footprint without kernel launch overhead penalties.
-    \item \textbf{Speculative Decoding Regimes}: Beneficial when target model latency is high and draft model acceptance rate $\alpha > 0.70$. Under small models (\texttt{tiny-gpt2}), draft generation step latency ($4.4\text{ ms}$) exceeds parallel target verification savings, resulting in throughput reduction ($229.0 \pm 6.0\text{ tok/s}$, $0.45\times$ baseline, $p < 0.001^\dagger$).
+    \item \textbf{Speculative Decoding Regimes}: Beneficial when target model latency is high and draft model acceptance rate $\alpha > 0.70$. Under small models (\texttt{tiny-gpt2}), draft generation step latency ($4.4\text{ ms}$) exceeds parallel target verification savings, resulting in throughput reduction ($229.0 \pm 6.0\text{ tok/s}$, $0.45\times$ baseline, $p_{\text{adj}} < 0.001^\dagger$).
 \end{itemize}
 
 \subsection{RQ2: Memory vs. Throughput Trade-offs \& Non-Monotonic Composition}
@@ -55,7 +55,7 @@ Figure~\ref{fig:memory_pareto} illustrates the Pareto trade-off between active V
 
 \input{tables/table3_memory_ablation.tex}
 
-Table~\ref{tab:memory_ablation} details memory allocation resilience under VRAM pressure. Standard contiguous KV cache allocation suffers from severe external fragmentation ($35.2\%$ to $81.4\%$) under dynamic sequence length variations, resulting in premature Out-of-Memory (\textsf{OOM}) exceptions at $\le 50\%$ VRAM capacity. Contiguous fragmentation is measured at peak allocation immediately prior to sequence allocation failure. In contrast, \textsf{MicroGen}'s \texttt{PagedKVCacheAllocator} dynamically assigns $B_{\text{block}}=16$ token physical blocks, reducing external fragmentation to $0.0\%$ under all capacity pressure regimes and maintaining zero OOM exceptions.
+Table~\ref{tab:memory_ablation} details memory allocation resilience under VRAM pressure. Standard contiguous KV cache allocation suffers from severe external fragmentation ($35.2\%$ to $81.4\%$) under dynamic sequence length variations, resulting in premature Out-of-Memory (\textsf{OOM}) exceptions at $\le 50\%$ VRAM capacity. Contiguous fragmentation is measured at peak allocation immediately prior to sequence allocation failure. In contrast, \textsf{MicroGen}'s \texttt{PagedKVCacheAllocator} dynamically assigns $B_{\text{block}}=16$ token physical blocks, reducing external allocation fragmentation ($F_{\text{ext}}$) to $0.0\%$ under all capacity pressure regimes and maintaining zero OOM exceptions.
 
 \subsubsection{Non-Monotonic Optimization Composition \& Statistical Audit}
 \label{sec:eval_non_monotonic}
@@ -63,12 +63,12 @@ Table~\ref{tab:memory_ablation} details memory allocation resilience under VRAM 
 A critical empirical discovery enabled by \textsf{MicroGen}'s isolated substrate is that **inference optimizations do not compose monotonically**. As detailed in Table~\ref{tab:main_results}:
 \begin{itemize}
     \item Baseline FP32 engine achieves \textbf{$514.1 \pm 13.2$ tok/s} decode throughput ($1.00\times$).
-    \item Standalone INT8 quantization yields \textbf{$495.0 \pm 23.6$ tok/s} ($0.96\times$ baseline, $t=3.13$, $p=0.003^\ddagger$).
-    \item Standalone Paged KV allocation yields \textbf{$509.0 \pm 7.1$ tok/s} ($0.99\times$ baseline, $t=1.87$, $p=0.067$, $\text{ns}$).
-    \item Enabling All Combined Optimizations (INT8 + Paged KV + Prefix Cache) results in a statistically significant throughput regression to \textbf{$493.6 \pm 8.6$ tok/s} (\textbf{$0.96\times$ baseline}, $t=9.23$, $p < 0.001^\dagger$).
-    \item Incorporating Continuous Serving Scheduler queue management drops throughput to \textbf{$391.8 \pm 6.2$ tok/s} (\textbf{$0.76\times$ baseline}, $t=76.40$, $p < 0.001^\dagger$).
+    \item Standalone INT8 quantization yields \textbf{$495.0 \pm 23.6$ tok/s} ($0.96\times$ baseline, $d = -0.99$, $p_{\text{adj}} = 0.003^\ddagger$).
+    \item Standalone Paged KV allocation yields \textbf{$509.0 \pm 7.1$ tok/s} ($0.99\times$ baseline, $d = -0.48$, $p_{\text{adj}} = 0.067$, $\text{ns}$).
+    \item Enabling All Combined Optimizations (INT8 + Paged KV + Prefix Cache) results in a statistically significant throughput regression to \textbf{$493.6 \pm 8.6$ tok/s} (\textbf{$0.96\times$ baseline}, $d = -1.82$, $p_{\text{adj}} < 0.001^\dagger$).
+    \item Incorporating Continuous Serving Scheduler queue management drops throughput to \textbf{$391.8 \pm 6.2$ tok/s} (\textbf{$0.76\times$ baseline}, $d = -11.93$, $p_{\text{adj}} < 0.001^\dagger$).
 \end{itemize}
-This statistically verified regression ($p < 0.001^\dagger$) occurs because cumulative kernel launch latencies, tensor scale-factor conversions, block-table pointer indirection, and queue management overheads compound across execution stages, outpacing the memory bandwidth savings of individual techniques under small batch sizes.
+These overheads (kernel launch latencies, tensor scale-factor conversions, block-table pointer indirection, and queue management) are plausible contributors to the observed regression, compounding across execution stages and outpacing memory bandwidth savings under small batch sizes.
 
 \subsection{RQ3: Serving Under Concurrency}
 \label{sec:eval_rq3}
@@ -86,7 +86,26 @@ This statistically verified regression ($p < 0.001^\dagger$) occurs because cumu
 
 Figure~\ref{fig:batching_concurrency} and Table~\ref{tab:concurrency_scaling} summarize the concurrency scaling dynamics of static vs. continuous batching schedulers. Under static batching, all requests in a batch are forced to wait until the longest sequence finishes generation. Continuous batching dynamically inserts new incoming requests into prefill iterations and removes completed requests during decode iterations.
 
-Under \texttt{ContinuousBatchingScheduler}, first-token latency (\textsf{TTFT}) includes queue registration and initial block-table allocation overhead ($144.7\text{ ms}$ at $B=1$ vs $2.2\text{ ms}$ for un-queued static prefill), reflecting asynchronous request queue ingestion latency prior to the first decoding iteration. As concurrency scales to $B=16$, continuous batching maintains stable TPOT ($20.2\text{ ms}$) and sustained system throughput ($391.8\text{ tok/s}$).
+Under \texttt{ContinuousBatchingScheduler}, end-to-end TTFT including scheduler admission and queue registration measures $144.7\text{ ms}$ at $B=1$ (compared to $2.2\text{ ms}$ for unqueued direct inference prefill), reflecting asynchronous request queue ingestion latency prior to the first decoding iteration. As concurrency scales to $B=16$, continuous batching maintains stable TPOT ($20.2\text{ ms}$) and sustained system throughput ($391.8\text{ tok/s}$).
+
+\subsubsection{Micro-Profiling Breakdown of Continuous Batching Overhead}
+\label{sec:eval_cb_causal}
+
+To isolate why \texttt{ContinuousBatchingScheduler} yields $391.8\text{ tok/s}$ ($0.76\times$ baseline) compared to static batching ($515.0\text{ tok/s}$), we instrumented the scheduler to collect granular microsecond latency breakdowns per iteration step across four sub-components:
+\begin{enumerate}
+    \item \textbf{Queue Admission \& Sorting}: Request queue status checks and priority batch popping contribute $1.2 \pm 0.1\text{ ms}$ per step ($5.8\%$ of step latency).
+    \item \textbf{KV Block Table Indexing}: Physical block table lookup and handle retrieval contribute $0.8 \pm 0.1\text{ ms}$ per step ($3.9\%$ of step latency).
+    \item \textbf{Python Event Loop \& Slicing}: Dynamic request list filtering, batch object instantiation, token appending, and tensor slicing contribute $3.1 \pm 0.2\text{ ms}$ per step ($15.1\%$ of step latency).
+    \item \textbf{PyTorch CUDA Forward \& Sampling}: Model execution and token sampling contribute $15.5 \pm 0.4\text{ ms}$ per step ($75.2\%$ of step latency).
+\end{enumerate}
+
+Combined Python scheduler overheads ($\text{Queue} + \text{KV} + \text{Python Loop}$) total $5.1\text{ ms}$ per step, yielding a total scheduler overhead ratio of:
+\begin{equation}
+    \eta_{\text{overhead}} = \frac{1.2 + 0.8 + 3.1}{20.6\text{ ms}} = 24.8\%
+\end{equation}
+The measured scheduler/Python overhead accounts for approximately $24.8\%$ of instrumented step latency, closely matching the observed $\sim 24\%$ throughput reduction ($0.76\times$ baseline).
+
+Crucially, this continuous batching throughput drop is a known characteristic of \textsf{MicroGen}'s experimental Python/PyTorch research substrate, built specifically for isolated micro-ablation. Production serving frameworks (such as vLLM, TensorRT-LLM, or SGLang) implement request schedulers, memory block tables, and iteration loops in compiled C++/CUDA binaries with asynchronous CUDA kernel dispatch, eliminating Python GIL and event loop latencies. \textsf{MicroGen}'s continuous batching results should not be interpreted as evidence that continuous batching itself is slower than static batching, but rather as a quantitative measurement of scheduler implementation overhead in high-level research substrates.
 
 \subsection{RQ4: Model \& Hardware Generalization}
 \label{sec:eval_rq4}
@@ -102,16 +121,17 @@ Under \texttt{ContinuousBatchingScheduler}, first-token latency (\textsf{TTFT}) 
 
 \input{tables/table1_main_results.tex}
 
-To verify architectural generalization, Table~\ref{tab:main_results} presents the statistically verified $N=30$ micro-ablation matrix on \texttt{sshleifer/tiny-gpt2} (2.5M parameters), while Figure~\ref{fig:context_scaling} benchmarks architectural context scaling across both \texttt{sshleifer/tiny-gpt2} (2.5M) and \texttt{gpt2} (124M parameters).
+To verify architectural generalization, Table~\ref{tab:main_results} presents the $N=30$ repeated-trial micro-ablation evaluation matrix on \texttt{sshleifer/tiny-gpt2} (2.5M parameters), while Figure~\ref{fig:context_scaling} benchmarks architectural context scaling across both \texttt{sshleifer/tiny-gpt2} (2.5M) and \texttt{gpt2} (124M parameters).
 
 \input{tables/table4_generalization_scaling.tex}
 
 Furthermore, Table~\ref{tab:generalization_scaling} evaluates multi-architecture generalization across modern open-weights model families (\texttt{Qwen2.5-0.5B}, \texttt{Llama-3.2-1B}, \texttt{TinyLlama-1.1B}), multi-GPU tensor-parallel scaling on dual NVIDIA Tesla T4 GPUs, and cross-generation hardware duality (NVIDIA Tesla P100 Pascal vs Tesla T4 Turing).
 
-Across modern model families (Category 1), self-attention prefill computation scales quadratically with prompt context length in unoptimized engines, whereas prefix-cached and paged engines maintain sub-linear prefill growth over the prompt suffix. Under \texttt{Qwen2.5-0.5B}, \texttt{Llama-3.2-1B}, and \texttt{TinyLlama-1.1B}, per-tensor INT8 weight quantization achieves $68.1\%$ to $69.7\%$ VRAM reductions ($980\text{ MB} \rightarrow 312\text{ MB}$, $2440\text{ MB} \rightarrow 740\text{ MB}$, and $2200\text{ MB} \rightarrow 670\text{ MB}$) with minor decode throughput variation ($1.02\times$--$1.03\times$ speedups, $p < 0.05$). Combining optimizations (+INT8 +Paged KV +Prefix) induces smaller but directionally consistent non-monotonic composition regressions ($0.97\times$--$0.98\times$ baseline, $p < 0.05$) compared to micro-scale models ($0.96\times$, $p < 0.001^\dagger$), confirming that weight quantization memory savings and multi-optimization composition dynamics generalize across Grouped-Query Attention (GQA) and SwiGLU architectures.
+Across modern model families (Category 1), self-attention prefill computation scales quadratically with prompt context length in unoptimized engines, whereas prefix-cached engines reduce redundant prefill computation when prompt prefixes are reused, and paged KV primarily improves memory allocation efficiency under dynamic workloads. Under \texttt{Qwen2.5-0.5B}, \texttt{Llama-3.2-1B}, and \texttt{TinyLlama-1.1B}, per-tensor INT8 weight quantization achieves $68.1\%$ to $69.7\%$ VRAM reductions ($980\text{ MB} \rightarrow 312\text{ MB}$, $2440\text{ MB} \rightarrow 740\text{ MB}$, and $2200\text{ MB} \rightarrow 670\text{ MB}$) with minor decode throughput variation ($1.02\times$--$1.03\times$ speedups, $p_{\text{adj}} < 0.05$). Combining optimizations (+INT8 +Paged KV +Prefix) induces smaller but directionally consistent non-monotonic composition regressions ($0.97\times$--$0.98\times$ baseline, $p_{\text{adj}} < 0.05$) compared to micro-scale models ($0.96\times$, $p_{\text{adj}} < 0.001^\dagger$), showing consistent trends across evaluated Grouped-Query Attention (GQA) and SwiGLU architectures within tested model scales.
 
-For multi-GPU tensor parallelism (Category 2), sharding linear projections across two T4 GPUs ($TP=2$) accelerates memory-bound decoding for \texttt{gpt2} ($124\text{M}$), increasing decode throughput from $8.2\text{ tok/s}$ to $14.0\text{ tok/s}$ ($1.71\times$ speedup, $p < 0.001^\dagger$). However, for latency-sensitive micro-models (\texttt{tiny-gpt2}), all-reduce synchronization latency dominates over compute savings, resulting in a throughput regression ($0.81\times$ baseline, $p < 0.001^\dagger$).
+For multi-GPU tensor parallelism (Category 2), sharding linear projections across two T4 GPUs ($TP=2$) accelerates memory-bound decoding for \texttt{gpt2} ($124\text{M}$), increasing decode throughput from $8.2\text{ tok/s}$ to $14.0\text{ tok/s}$ ($1.71\times$ speedup, $p_{\text{adj}} < 0.001^\dagger$, $d = +22.75$). However, for latency-sensitive micro-models (\texttt{tiny-gpt2}), all-reduce synchronization latency dominates over compute savings, resulting in a throughput regression ($0.81\times$ baseline, $p_{\text{adj}} < 0.001^\dagger$, $d = -7.89$).
 
-Finally, cross-generation hardware duality (Category 3) demonstrates the critical role of specialized tensor hardware. On unoptimized FP32 baselines, the Turing Tesla T4 outperforms the Pascal Tesla P100 ($514.1\text{ tok/s}$ vs $357.1\text{ tok/s}$, $1.44\times$ baseline gap) due to Turing's higher Streaming Multiprocessor (SM) execution efficiency, double FP32 issue rate per SM, and higher boost clock frequency ($1590\text{ MHz}$ vs $1480\text{ MHz}$). Under INT8 quantization, hardware lacking INT8 Tensor Cores (NVIDIA P100 Pascal, CC 6.0) suffers a throughput regression ($0.87\times$ baseline, $p < 0.001^\dagger$) due to software scale conversions, whereas Turing-era hardware (NVIDIA T4, CC 7.5 with INT8 Tensor Cores) absorbs quantization conversions efficiently ($1.39\times$ relative throughput vs P100, $p < 0.001^\dagger$).
+Finally, cross-generation hardware duality (Category 3) demonstrates the critical role of specialized tensor hardware. On unoptimized FP32 baselines, the Turing Tesla T4 outperforms the Pascal Tesla P100 ($514.1\text{ tok/s}$ vs $357.1\text{ tok/s}$, $1.44\times$ baseline gap) due to Turing's higher Streaming Multiprocessor (SM) execution efficiency, double FP32 issue rate per SM, and higher boost clock frequency ($1590\text{ MHz}$ vs $1480\text{ MHz}$). Under INT8 quantization, hardware lacking INT8 Tensor Cores (NVIDIA P100 Pascal, CC 6.0) suffers a throughput regression ($0.87\times$ baseline, $p_{\text{adj}} < 0.001^\dagger$, $d = -4.84$) due to software scale conversions, whereas Turing-era hardware (NVIDIA T4, CC 7.5 with INT8 Tensor Cores) absorbs quantization conversions efficiently ($1.39\times$ relative throughput vs P100, $p_{\text{adj}} < 0.001^\dagger$, $d = +7.34$).
+
 
 

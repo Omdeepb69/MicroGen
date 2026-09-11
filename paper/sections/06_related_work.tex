@@ -16,7 +16,7 @@ Traditional deep learning inference engines employed static request batching, fo
 \subsection{Quantization \& Model Compression}
 \label{sec:rel_quant}
 
-Post-training quantization reduces weight and activation precision to bypass memory bandwidth bottlenecks in autoregressive decoding. LLM.int8()~\cite{dettmers2022llmint8} introduced vector-wise quantization with outlier isolation, while SmoothQuant~\cite{xiao2023smoothquant} enabled 8-bit weight and activation quantization across transformer layers. AWQ~\cite{lin2023awq} and GPTQ~\cite{frantar2022gptq} further advanced 4-bit weight-only quantization. \textsf{MicroGen} implements per-tensor INT8 weight quantization (\texttt{QuantizedBackend}) to analyze memory footprint compression ($74.2\%$ VRAM reduction) and dequantization compute overheads under low-resource hardware constraints.
+Post-training quantization reduces weight and activation precision to bypass memory bandwidth bottlenecks in autoregressive decoding. LLM.int8()~\cite{dettmers2022llmint8} introduced vector-wise quantization with outlier isolation, while SmoothQuant~\cite{xiao2023smoothquant} enabled 8-bit weight and activation quantization across transformer layers. AWQ~\cite{lin2023awq} and GPTQ~\cite{frantar2022gptq} further advanced 4-bit weight-only quantization. \textsf{MicroGen} implements per-tensor INT8 weight quantization (\texttt{QuantizedBackend}) to analyze memory footprint compression ($67.8\%$ VRAM reduction) and dequantization compute overheads under low-resource hardware constraints.
 
 \subsection{Speculative Decoding \& Parallel Execution}
 \label{sec:rel_speculative}

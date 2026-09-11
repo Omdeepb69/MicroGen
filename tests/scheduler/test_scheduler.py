@@ -67,3 +67,19 @@ def test_continuous_batching_scheduler_e2e():
     # Ensure KV caches were properly cleaned up
     assert kv_cache_manager.active_requests_count() == 0
     assert kv_cache_manager.get_total_memory_usage_bytes() == 0
+
+    # Verify micro-profiling breakdown metrics
+    breakdown = scheduler.get_profile_breakdown()
+    assert "queue_pop_ms" in breakdown
+    assert "kv_manage_ms" in breakdown
+    assert "backend_cuda_ms" in breakdown
+    assert "python_loop_ms" in breakdown
+    assert "total_scheduler_ms" in breakdown
+    assert "scheduler_overhead_ratio" in breakdown
+    assert breakdown["total_steps"] > 0
+    assert breakdown["total_scheduler_ms"] >= 0.0
+
+    scheduler.reset_profiling()
+    reset_breakdown = scheduler.get_profile_breakdown()
+    assert reset_breakdown["total_steps"] == 0.0
+

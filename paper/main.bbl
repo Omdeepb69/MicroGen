@@ -1,0 +1,83 @@
+\begin{thebibliography}{10}
+
+\bibitem{cai2024medusa}
+Tianle Cai, Yuhong Li, Zhengyang Geng, Sen Peng, Tri Dao, and Dawn Song.
+\newblock Medusa: Simple llm generation acceleration with multiple decoding
+  heads.
+\newblock {\em arXiv preprint arXiv:2401.10774}, 2024.
+
+\bibitem{chen2023speculative}
+Charlie Chen, Sun Yang, Ankur Bapna, Orhan Firat, Kyunghyun Cho, and Luke
+  Zettlemoyer.
+\newblock Accelerating large language model decoding with speculative sampling.
+\newblock In {\em International Conference on Machine Learning (ICML)}, pages
+  4657--4677, 2023.
+
+\bibitem{dettmers2022llmint8}
+Tim Dettmers, Mike Lewis, Younes Belkada, and Luke Zettlemoyer.
+\newblock Llm.int8(): 8-bit matrix multiplication for transformers at scale.
+\newblock In {\em Advances in Neural Information Processing Systems (NeurIPS)},
+  volume~35, pages 30318--30332, 2022.
+
+\bibitem{frantar2022gptq}
+Elias Frantar, Saleh Ashkboos, Torsten Hoefler, and Dan Alistarh.
+\newblock Gptq: Accurate post-training quantization for generative pre-trained
+  transformers.
+\newblock {\em arXiv preprint arXiv:2210.17323}, 2022.
+
+\bibitem{kwon2023pagedattention}
+Woosuk Kwon, Zhuohan Li, Siyuan Zhang, Lianmin Zhang, Jiaao Yu, Lianmin Zheng,
+  Xiuyu Li, Yang Yu, Ion Stoica, and Joseph~E Gonzalez.
+\newblock Efficient memory management for large language model serving with
+  pagedattention.
+\newblock In {\em Proceedings of the 29th Symposium on Operating Systems
+  Principles (SOSP)}, pages 611--626, 2023.
+
+\bibitem{leviathan2023fast}
+Yaniv Leviathan, Matan Kalman, and Yossi Matias.
+\newblock Fast inference from transformers via speculative decoding.
+\newblock In {\em International Conference on Machine Learning (ICML)}, pages
+  19274--19286, 2023.
+
+\bibitem{li2024eagle}
+Yuhui Li, Fangyun Wei, Chao Zhang, and Hongyang Zhang.
+\newblock Eagle: Speculative sampling requires rethinking feature uncertainty.
+\newblock {\em arXiv preprint arXiv:2401.15077}, 2024.
+
+\bibitem{lin2023awq}
+Ji~Lin, Jiaming Tang, Haotian Yang, Yujun Zhang, Guangxuan Xiao, Chuang Gan,
+  and Song Han.
+\newblock Awq: Activation-aware weight quantization for llm compression and
+  acceleration.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition (CVPR)}, 2023.
+
+\bibitem{shoeybi2019megatron}
+Mohammad Shoeybi, Mostofa Patwary, Raul Puri, Patrick LeGresley, Jared Casper,
+  and Bryan Catanzaro.
+\newblock Megatron-lm: Training multi-billion parameter language models using
+  model parallelism.
+\newblock {\em arXiv preprint arXiv:1909.08053}, 2019.
+
+\bibitem{xiao2023smoothquant}
+Guangxuan Xiao, Ji~Lin, Mickael Seznec, Hao Wu, Julien Demouth, and Song Han.
+\newblock Smoothquant: Accurate and efficient post-training quantization for
+  large language models.
+\newblock In {\em International Conference on Machine Learning (ICML)}, pages
+  38087--38104, 2023.
+
+\bibitem{yu2022orca}
+Gyeong-In Yu, Joo~Seong Jeong, Geon-Woo Kim, Soojeong Kim, and Byung-Gon Chun.
+\newblock Orca: A distributed serving system for transformer-based generative
+  models.
+\newblock In {\em Proceedings of the 16th USENIX Symposium on Operating Systems
+  Design and Implementation (OSDI)}, pages 521--538, 2022.
+
+\bibitem{zheng2024sglang}
+Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chien-Yu Huang, Chuanggan Sun,
+  Jiaao Yu, Shayi Cao, Christos Christakores, Ion Stoica, Joseph~E. Gonzalez,
+  et~al.
+\newblock Sglang: Efficient execution of structured language model programs.
+\newblock {\em arXiv preprint arXiv:2312.07104}, 2024.
+
+\end{thebibliography}

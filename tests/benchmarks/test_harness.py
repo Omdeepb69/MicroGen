@@ -9,6 +9,8 @@ import pytest
 from benchmarks.harness import (
     ExperimentConfig,
     ExperimentHarness,
+    adjusted_p_values_holm_bonferroni,
+    compute_cohens_d,
     compute_percentile,
     compute_stats,
     reset_environment,
@@ -31,8 +33,31 @@ def test_compute_stats():
     assert "p90" in stats
     assert "p95" in stats
     assert "p99" in stats
+    assert "se" in stats
+    assert "ci95_lower" in stats
+    assert "ci95_upper" in stats
     assert stats["p50"] == 50.5
     assert stats["mean"] == 50.5
+    assert stats["ci95_lower"] < stats["mean"] < stats["ci95_upper"]
+
+
+def test_compute_cohens_d():
+    d = compute_cohens_d(m1=10.0, s1=2.0, n1=30, m2=5.0, s2=2.0, n2=30)
+    assert d > 2.0  # Large effect size
+    assert compute_cohens_d(m1=10.0, s1=2.0, n1=1, m2=5.0, s2=2.0, n2=30) == 0.0
+
+
+def test_adjusted_p_values_holm_bonferroni():
+    raw_p = [0.01, 0.04, 0.03]
+    adj = adjusted_p_values_holm_bonferroni(raw_p)
+    assert len(adj) == 3
+    # 0.01 -> 0.01 * 3 = 0.03
+    # 0.03 -> 0.03 * 2 = 0.06
+    # 0.04 -> 0.04 * 1 = 0.04 -> max(0.06, 0.04) = 0.06
+    assert adj[0] == pytest.approx(0.03)
+    assert adj[1] == pytest.approx(0.06)
+    assert adj[2] == pytest.approx(0.06)
+    assert adjusted_p_values_holm_bonferroni([]) == []
 
 
 def test_reset_environment():

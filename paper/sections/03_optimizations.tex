@@ -6,7 +6,7 @@ To systematically benchmark LLM serving trade-offs, \textsf{MicroGen} formalizes
 \subsection{Hash-Based Shared Prefix Caching}
 \label{sec:opt_prefix}
 
-In multi-turn chat interactions and agentic workflows, concurrent requests frequently share identical prompt prefixes (e.g., system instructions, few-shot demonstrations, or context documents). \textsf{MicroGen} implements a hash-based Prefix Cache abstraction (\texttt{microgen/caching/prefix\_cache.py}) to eliminate redundant prefill compute, modeling the algorithmic principles of Radix Trie lookup in a lightweight Python/PyTorch substrate.
+In multi-turn chat interactions and agentic workflows, concurrent requests frequently share identical prompt prefixes (e.g., system instructions, few-shot demonstrations, or context documents). \textsf{MicroGen} implements a hash-based Prefix Cache abstraction (\texttt{microgen/caching/prefix\_cache.py}) to eliminate redundant prefill compute. Importantly, \textsf{MicroGen} implements hash-based prefix reuse with exact longest-common-prefix (LCP) key lookup as an experimental baseline and approximation of shared-prefix caching, rather than reproducing production tree/radix-trie data structures (e.g., SGLang's RadixAttention~\cite{zheng2024sglang}). This enables studying the performance phenomenon of prefix reuse in an isolated Python/PyTorch substrate.
 
 Given an incoming request prompt sequence $P = (t_1, t_2, \dots, t_N)$, the prefix manager queries the cache table to find the Longest Common Prefix (LCP) length $\ell_{\text{match}}$ already cached in GPU memory:
 \begin{equation}
@@ -19,6 +19,17 @@ The analytical Time-to-First-Token (\textsf{TTFT}) for cached execution is model
     \text{\textsf{TTFT}}_{\text{cached}} = \text{\textsf{TTFT}}_{\text{baseline}} \cdot \left(1 - \frac{\ell_{\text{match}}}{N}\right) + \delta_{\text{cache}}
 \end{equation}
 where $\delta_{\text{cache}} < 0.7\text{ ms}$ represents the measured prefix cache lookup overhead.
+
+\subsection{Physical Block Paged KV Memory Allocation}
+\label{sec:opt_paged_kv}
+
+Standard PyTorch KV caching allocates contiguous VRAM buffers sized for maximum potential sequence lengths, leading to severe external memory fragmentation. \textsf{MicroGen} implements physical block-paged KV memory management (\texttt{microgen/runtime/paged\_kv.py}) dividing KV cache tensors into fixed-size physical blocks ($B_{\text{block}}$ tokens).
+
+We define contiguous-allocation external memory fragmentation $F_{\text{ext}}$ mathematically as:
+\begin{equation}
+    F_{\text{ext}} = 1 - \frac{\text{size of largest contiguous free VRAM block}}{\text{total free VRAM}}
+\end{equation}
+While physical block allocation eliminates contiguous-allocation external fragmentation ($F_{\text{ext}} = 0.0\%$), internal fragmentation within allocated physical blocks remains strictly bounded by block capacity $B_{\text{block}}$.
 
 \subsection{Post-Training Weight Quantization}
 \label{sec:opt_quant}
@@ -34,7 +45,7 @@ During inference forward passes, linear layer matrix multiplications are compute
 \begin{equation}
     Y = \left(X \cdot W_{\text{int8}}^T\right) \cdot \gamma + b
 \end{equation}
-Quantization reduces weight memory consumption by up to $4\times$, transforming the storage requirement from 4 bytes per parameter (FP32) to 1 byte per parameter (INT8), with minimal impact on output logit accuracy.
+Quantization reduces weight memory consumption by up to $4\times$, transforming the storage requirement from 4 bytes per parameter (FP32) to 1 byte per parameter (INT8).
 
 \subsection{Speculative Decoding Draft-Target Verification}
 \label{sec:opt_speculative}
@@ -51,7 +62,7 @@ Candidates are validated sequentially using modified rejection sampling. Candida
 \begin{equation}
     P(\text{accept } \tilde{x}_i) = \min\left(1, \frac{P_{\text{target}}(\tilde{x}_i \mid x_{<i})}{P_{\text{draft}}(\tilde{x}_i \mid x_{<i})}\right)
 \end{equation}
-If a candidate $\tilde{x}_k$ is rejected, it is resampled from the adjusted distribution $P_{\text{resample}}(x) = \text{\textsf{relu}}(P_{\text{target}}(x) - P_{\text{draft}}(x))$, and candidate tokens beyond index $k$ are discarded.
+If a candidate $\tilde{x}_k$ is rejected, it is resampled from the adjusted distribution $P_{\text{resample}}(x) = \text{\textsf{relu}}(P_{\text{target}}(x) - P_{\text{draft}}(x))$, and candidate tokens beyond index $k$ are discarded. Speculative decoding achieves positive speedups only when the empirical draft token acceptance rate $\alpha = \mathbb{E}[\text{accepted tokens}] / (K+1)$ exceeds the theoretical latency break-even threshold $\alpha_{\text{threshold}} = \frac{T_{\text{draft\_step}}}{T_{\text{target\_step}}}$. Under our evaluated regime, positive speedup required draft acceptance rates exceeding approximately $\alpha \approx 0.70$.
 
 \subsection{Tensor Parallel Multi-GPU Execution}
 \label{sec:opt_tensor_parallel}

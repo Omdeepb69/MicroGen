@@ -3,9 +3,26 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py$class
+build/
+dist/
+*.egg-info/
 
-# Virtual environments
+# Markdown Files (Keep ONLY README.md)
+*.md
+!README.md
+
+# Temporary & Scratch Folders
+scratch/
+tmp/
+*.tmp
+microgen_paper_results*
+
+# Zip files (Keep ONLY arXiv submission archives)
+*.zip
+!arxiv_submission.zip
+!paper/arxiv_submission.zip
+
+# Virtual Environments
 mgmg/
 venv/
 .venv/
@@ -18,27 +35,30 @@ ENV/
 .coverage
 htmlcov/
 
-# Agent & System Metadata
+# Agent & IDE Metadata
 .agents/
 .gemini/
 .idea/
 .vscode/
-*.log
-AGENTS.md
-ARCHITECTURE.md
-PROJECT_PLAN.md
-full_overview.md
 
-# Benchmark Output Artifacts
+# Benchmark Outputs & Data Logs
 benchmark_results.json
 kaggle_benchmark_results.json
 microgen_benchmark_report.html
 *.html
 results/
-paper/
 microgen_paper_results/
+
+# LaTeX Temporary Compilation Build Files (Keep .tex, .pdf, .bbl, .zip, figures, tables)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
 
 # Operating System Files
 .DS_Store
 Thumbs.db
-*.tmp

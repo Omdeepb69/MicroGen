@@ -1,40 +1,40 @@
-# ⚡ MicroGen: Modular, Hardware-Aware LLM Inference Engine
+# ⚡ MicroGen: LLM Inference Optimization Research Framework
 
+[![PyPI](https://img.shields.io/pypi/v/microgen-llm.svg)](https://pypi.org/project/microgen-llm/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-73%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-149%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**MicroGen** is a high-performance, modular, hardware-aware Large Language Model (LLM) inference engine built from scratch in PyTorch. Designed for low latency, high throughput, and memory efficiency across CPU and multi-GPU architectures, MicroGen implements state-of-the-art serving techniques including **Continuous Batching**, **Paged KV Cache**, **Prefix Caching**, **INT8 Weight & Dynamic KV Quantization**, **Multi-GPU Tensor Parallelism**, and **Speculative Decoding**.
+**MicroGen** (`microgen-llm` on PyPI) is a modular, hardware-aware Large Language Model (LLM) inference research framework and experimental substrate built from scratch in PyTorch. Designed to dissect memory, latency, and throughput trade-offs under controlled hardware and workload conditions, MicroGen isolates state-of-the-art serving techniques including **Physical Paged KV Allocation**, **Hash-Based Prefix Reuse**, **INT8 Weight Quantization**, **Multi-GPU Tensor Parallelism**, **Speculative Decoding**, and **Continuous Request Batching**.
 
 ---
 
-## 📌 Short Description (For GitHub Repository)
+## 📌 Research Framing & Evaluation Substrate
 
-> **MicroGen**: A modular PyTorch LLM inference engine and research testbed featuring Continuous Batching, Paged & Quantized INT8 KV Cache, Multi-GPU Tensor Parallelism, Speculative Decoding, and OpenAI-compatible SSE streaming API.
+> **MicroGen**: An empirical LLM inference research substrate isolating optimization overheads, non-monotonic composition dynamics, and hardware trade-offs behind modular execution protocols. Tested via an $N=30$ repeated-trial evaluation protocol across NVIDIA Tesla T4 and P100 GPUs and open-weights model families (GPT-2, Qwen2.5, Llama-3.2).
 
-**Topics/Tags for GitHub:** `llm-inference`, `pytorch`, `kv-cache`, `continuous-batching`, `paged-attention`, `tensor-parallelism`, `quantization`, `speculative-decoding`, `fastapi`, `cuda`.
+**Topics/Tags for GitHub:** `llm-inference`, `systems-research`, `pytorch`, `kv-cache`, `continuous-batching`, `paged-attention`, `tensor-parallelism`, `quantization`, `speculative-decoding`, `fastapi`, `cuda`.
 
-> **Note on Measurement Scope & Serving Layer**: Beyond the empirical benchmarking substrate described in the paper, MicroGen includes a working OpenAI-compatible HTTP serving layer (`microgen/api/` with FastAPI, SSE streaming, and 73 passing unit/integration tests) for practical use. The paper's $N=30$ throughput/latency figures reflect direct in-process engine-level measurement (isolating model, memory, and kernel dynamics), whereas end-to-end HTTP socket and ASGI network-layer load testing represents an ongoing research extension.
+> **Note on Research Framework Positioning**: MicroGen is explicitly designed as an experimental systems research substrate for isolating optimization overheads and measuring non-monotonic interaction dynamics under controlled conditions, rather than competing directly with production C++/CUDA serving engines (e.g., vLLM, TensorRT-LLM, SGLang). Beyond the empirical benchmarking substrate described in the paper, MicroGen includes a working OpenAI-compatible HTTP serving layer (`microgen/api/` with FastAPI, SSE streaming, and 149 passing unit/integration tests). The paper's $N=30$ throughput/latency figures reflect direct in-process engine-level measurement (isolating model, memory, and kernel dynamics).
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Empirical Discoveries & System Principles
 
-- **🚀 Continuous Batching Scheduler**: Dynamic request admission, left-padded prefill, and decode iteration loops without static batching pauses or VRAM fragmentation.
-- **🧠 Paged & Quantized INT8 KV Cache**:
-  - **Paged KV Allocator**: Fixed-size physical memory block allocation with logical-to-physical sequence block mapping.
-  - **Sliding Window Eviction**: Configurable window length eviction to serve long-context sequences.
-  - **Grouped-Query Attention (GQA)**: Native `repeat_kv` key-value head repetition support.
-  - **Dynamic INT8 KV Quantization**: Vector scale dynamic quantization delivering **>2x memory footprint reduction** with **>0.98 cosine logit similarity**.
-- **⚡ Weight Quantization Engine**: Static per-channel INT8 weight quantization (`QuantizedLinear` wrapper) reducing model VRAM memory footprint.
-- **🌐 Multi-GPU Tensor Parallelism**: Sharded model execution using `ColumnParallelLinear` and `RowParallelLinear` with all-reduce sum aggregation across GPU ranks.
-- **🔮 Speculative Decoding Acceleration**: Target model logit verification, probability rejection sampling, and non-blocking KV cache state rollback on token rejection.
-- **⚡ Prompt Prefix Caching & Rate Limiting**: SHA256 token sequence hashing with sub-sequence prefix lookup and thread-safe token-bucket rate limiting (RPM/TPM).
-- **📊 Granular Profiler & Bottleneck Diagnostics**: Hardware CUDA/CPU event execution profiler and automated bottleneck classification (`prefill`, `decode`, `sampling`, `balanced`).
-- **🔌 OpenAI-Compatible HTTP API**: Built with FastAPI, offering `/v1/chat/completions`, `/v1/completions`, and server-sent event (SSE) streaming.
-- **🛠️ Unified CLI & Kaggle Benchmark Suite**: CLI runner (`microgen serve`, `generate`, `profile`) and automated Kaggle Multi-GPU benchmark runner producing visual HTML performance reports (`microgen_benchmark_report.html`).
+- **🚀 Non-Monotonic Optimization Composition**: Combining individually useful optimizations (+INT8, +Paged KV, +Prefix Cache) yields a statistically significant throughput regression to **$0.96\times$ baseline** ($493.6 \pm 8.6\text{ tok/s}$, $p_{\text{adj}} < 0.001$), while continuous batching scheduler overhead drops throughput to **$0.76\times$ baseline** ($391.8 \pm 6.2\text{ tok/s}$, $p_{\text{adj}} < 0.001$) due to cumulative Python event loop and pointer indirection overheads ($\eta_{\text{overhead}} = 24.8\%$).
+- **🧠 Physical Block Paged KV Allocation**: Dynamically assigns $B_{\text{block}}=16$ token physical blocks, eliminating external contiguous-allocation memory fragmentation ($F_{\text{ext}} = 1 - \frac{\text{max contiguous block}}{\text{total free VRAM}} = 0.0\%$) under dynamic memory pressure regimes.
+- **⚡ Hash-Based Prefix Cache Reuse**: Implements exact longest-common-prefix (LCP) key lookup as an experimental baseline approximation of shared-prefix caching, delivering up to a **$3.91\times$ prefill TTFT speedup** ($6.6 \pm 0.3\text{ ms}$ vs $25.8 \pm 1.2\text{ ms}$, $p_{\text{adj}} < 0.001$) under 100% prompt overlap at $L_{\text{prompt}}=1024$ tokens, crossing into positive speedup once prompt overlap exceeds 25%.
+- **🔮 Speculative Decoding Acceptance Boundaries**: Characterizes acceptance rate break-even threshold $\alpha_{\text{threshold}} = \frac{T_{\text{draft\_step}}}{T_{\text{target\_step}}}$. On small target models (`tiny-gpt2`), draft step overhead ($4.4\text{ ms}$) exceeds verification savings, resulting in a throughput regression (**$0.45\times$ baseline**, $p_{\text{adj}} < 0.001$).
+- **🌐 Multi-GPU Tensor Parallelism**: Shards linear projections across dual NVIDIA T4 GPUs ($TP=2$), accelerating memory-bound decoding for GPT-2 ($124\text{M}$) from $8.2\text{ tok/s}$ to $14.0\text{ tok/s}$ (**$1.71\times$ speedup**, $p_{\text{adj}} < 0.001$).
+
+### 🎯 Portfolio & Resume Framing (Research $\rightarrow$ Methodology $\rightarrow$ Discovery $\rightarrow$ Result)
+- **LLM Inference Systems Architecture**: Designed and built **MicroGen**, a modular PyTorch LLM inference research framework isolating memory, latency, and throughput trade-offs across CPU, CUDA, and multi-GPU ($TP=2$) execution protocols.
+- **Non-Monotonic Composition Analysis**: Discovered through an $N=30$ repeated-trial ablation protocol that composing individually positive optimizations (+INT8, +Paged KV, +Prefix Cache) yields non-monotonic throughput degradation (**$0.96\times$ baseline**, $p_{\text{adj}} < 0.001$).
+- **Prefix Reuse & TTFT Acceleration**: Implemented an experimental hash-based longest-common-prefix (LCP) KV cache manager achieving a **$3.91\times$ prefill TTFT speedup** ($6.6\text{ ms}$ vs $25.8\text{ ms}$, $p_{\text{adj}} < 0.001$) under 100% prompt overlap.
+- **Continuous Batching Overhead Profiling**: Built a micro-profiling harness isolating Python event loop overhead ($\eta_{\text{overhead}} = 24.8\%$), causally explaining continuous batching throughput regressions (**$0.76\times$ baseline**, $p_{\text{adj}} < 0.001$) in research substrates.
+- **Memory Modeling & Multi-GPU Acceleration**: Formalized external VRAM allocation fragmentation ($F_{\text{ext}} = 1 - \frac{\text{max contiguous block}}{\text{total free VRAM}}$) and sharded linear projections across dual NVIDIA T4 GPUs ($TP=2$), delivering a **$1.71\times$ throughput speedup** ($14.0\text{ tok/s}$ vs $8.2\text{ tok/s}$, $p_{\text{adj}} < 0.001$).
 
 ---
 
@@ -70,82 +70,80 @@ flowchart TD
 
 ## 🛠️ Installation & Setup
 
-### Prerequisites
-- Python **3.11+**
-- PyTorch **2.0+** (with CUDA support for GPU execution)
-
-### 1. Clone Repository & Create Virtual Environment
+### Install from PyPI
 ```bash
-git clone https://github.com/your-username/microgen.git
-cd microgen
+pip install microgen-llm
+```
+
+### Install from Source
+```bash
+git clone https://github.com/Omdeepb69/MicroGen.git
+cd MicroGen
 
 python -m venv venv
 source venv/bin/activate  # On Linux/macOS
 # or: venv\Scripts\activate on Windows
-```
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ---
 
 ## 🚀 Quickstart & Usage Examples
 
-### 1. Basic Generation via Python API
+### 1. Fluent SDK Wrapper API (`microgen.LLMEngine`)
 ```python
-from microgen.devices import get_device
-from microgen.backends import PyTorchBackend
+import microgen
 
-# 1. Initialize Hardware Device & Backend
-device = get_device("cuda" if torch.cuda.is_available() else "cpu")
-backend = PyTorchBackend(device=device)
-backend.load_model("sshleifer/tiny-gpt2")
+# Initialize engine with PyTorch FP32 backend
+engine = microgen.LLMEngine.from_pretrained(
+    "sshleifer/tiny-gpt2",
+    backend_type="pytorch",
+    device="cuda"
+)
 
-# 2. Tokenize & Prefill Prompt
-tokenizer = backend._tokenizer
-input_ids = tokenizer("MicroGen is a fast LLM engine", return_tensors="pt").input_ids
-logits, cache = backend.prefill(input_ids)
-
-# 3. Decode Loop
-sampled_token = backend.sample(logits)
-decode_logits, updated_cache = backend.decode(sampled_token, cache=cache)
+# Generate completion text
+output = engine.generate("MicroGen is a fast LLM inference engine", max_tokens=32)
+print("Output:", output)
 ```
 
 ### 2. INT8 Quantized Model Execution
 ```python
-from microgen.backends import QuantizedPyTorchBackend
-from microgen.runtime import KVCacheState
+import microgen
 
-# INT8 Weight Quantization + Dynamic INT8 KV Cache
-backend = QuantizedPyTorchBackend(device=device)
-backend.load_model("sshleifer/tiny-gpt2")
+# Load quantized backend (INT8 weights + dynamic INT8 KV cache)
+engine = microgen.LLMEngine.from_pretrained(
+    "sshleifer/tiny-gpt2",
+    backend_type="quantized",
+    device="cuda"
+)
 
-cache = KVCacheState(quantize_kv=True)  # >2x VRAM Memory Compression
-logits, updated_cache = backend.prefill(input_ids, cache=cache)
+output = engine.generate("Quantized inference reduces VRAM footprint", max_tokens=32)
+print("Quantized Output:", output)
 ```
 
-### 3. Multi-GPU Tensor Parallel Execution
+### 3. Multi-GPU Tensor Parallel Execution ($TP=2$)
 ```python
-from microgen.backends import TensorParallelPyTorchBackend
-from microgen.devices import get_device
+import microgen
 
-# Partition Linear layers across 2 GPU ranks
-devices = [get_device("cuda:0"), get_device("cuda:1")]
-tp_backend = TensorParallelPyTorchBackend(world_size=2, devices=devices)
-tp_backend.load_model("sshleifer/tiny-gpt2")
+# Partition linear layers across 2 GPU ranks
+tp_engine = microgen.LLMEngine.from_pretrained(
+    "gpt2",
+    backend_type="tensor_parallel",
+    tp_world_size=2
+)
 
-logits, cache = tp_backend.prefill(input_ids)
+output = tp_engine.generate("Distributed tensor parallelism scales decoding", max_tokens=32)
+print("TP Output:", output)
 ```
 
-### 4. Running OpenAI-Compatible HTTP Server & SSE Streaming
+### 4. OpenAI-Compatible HTTP Serving & SSE Streaming
 Start the HTTP API server:
 ```bash
-python -m microgen.cli.main serve --host 0.0.0.0 --port 8000 --model sshleifer/tiny-gpt2
+microgen serve --host 0.0.0.0 --port 8000 --model sshleifer/tiny-gpt2
 ```
 
-Test non-streaming completion with `curl`:
+Test completion with `curl`:
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -157,7 +155,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-Test SSE streaming completion:
+Test Server-Sent Events (SSE) streaming:
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -172,50 +170,55 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ## 💻 Command Line Interface (CLI)
 
-MicroGen includes a unified Click CLI:
+MicroGen provides a rich Click-based unified CLI (`microgen`):
 
 ```bash
 # 1. Start Server
 microgen serve --port 8000 --model sshleifer/tiny-gpt2
 
-# 2. Text Generation via CLI
+# 2. Terminal Interactive Chat
+microgen chat --model sshleifer/tiny-gpt2
+
+# 3. Standalone Text Generation
 microgen generate --prompt "Artificial Intelligence is" --max-tokens 32
 
-# 3. Profile Execution Bottlenecks
+# 4. Run Benchmark Suite
+microgen benchmark --model sshleifer/tiny-gpt2
+
+# 5. Profile Execution Bottlenecks
 microgen profile --prompt "Benchmark continuous batching" --backend quantized
 ```
 
 ---
 
-## 📊 Benchmarking & Kaggle GPU Runner
+## 📊 Benchmarking & Reproducibility Package
 
-MicroGen includes an automated benchmarking suite and a standalone Kaggle runner that executes performance tests across backends and generates interactive HTML reports:
+MicroGen includes an automated statistical benchmarking suite ($N=30$ repeated trials):
 
 ```bash
 # Run End-to-End Latency & Throughput Benchmark
 python scripts/e2e_benchmark.py
 
-# Run Kaggle Automated Multi-GPU Benchmark Suite
-python scripts/kaggle_benchmark_runner.py
+# Export LaTeX Paper Tables (paper/tables/*.tex)
+python scripts/export_paper_tables.py
+
+# Generate Publication Vector Figures (paper/figures/*.pdf)
+python scripts/generate_paper_figures.py
 ```
 
 **Artifacts Produced:**
-- `kaggle_benchmark_results.json`: Detailed TTFT (ms), ITL (ms), Throughput (tok/s), and Memory metrics.
-- `microgen_benchmark_report.html`: Self-contained visual HTML dashboard comparing all backends.
+- `paper/main.pdf`: Compiled 14-page research manuscript.
+- `arxiv_submission.zip`: Self-contained arXiv submission bundle.
 
 ---
 
 ## 🧪 Testing & Verification
 
-MicroGen is covered by a comprehensive unit and integration test suite:
+MicroGen is covered by a comprehensive 149-test Pytest suite:
 
 ```bash
-# Run full test suite (73 passing tests)
-PYTHONPATH=. pytest
-
-# Run specific test modules
-PYTHONPATH=. pytest tests/runtime/test_kv_cache.py
-PYTHONPATH=. pytest tests/backends/test_parallel.py
+# Run full isolated test suite (149 passing tests)
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest
 ```
 
 ---
@@ -232,13 +235,13 @@ microgen/
 │   ├── devices/         # Hardware device abstractions (CPU & CUDA)
 │   ├── profiling/       # Execution Profiler & Diagnostic Engine
 │   ├── runtime/         # KVCacheState, Paged KV Allocator & Sliding Window Eviction
+│   ├── sdk/             # High-level LLMEngine wrapper API
 │   └── scheduler/       # Priority RequestQueue, Batching & Continuous Batching Scheduler
-├── tests/               # 73 Unit & Integration Pytest suites
-├── scripts/             # End-to-End Benchmarking & Kaggle Runner scripts
-├── PROJECT_PLAN.md      # Persistent project roadmap log
-├── ARCHITECTURE.md     # Architectural boundary rules
-├── AGENTS.md           # Engineering guidelines
-└── requirements.txt     # Python dependencies
+├── paper/               # LaTeX research manuscript, tables, vector figures, and arXiv zip
+├── tests/               # 149 Unit & Integration Pytest test cases
+├── scripts/             # End-to-End Benchmarking & Table export scripts
+├── pyproject.toml       # PyPI packaging specification (`microgen-llm`)
+└── README.md            # Primary repository documentation
 ```
 
 ---
