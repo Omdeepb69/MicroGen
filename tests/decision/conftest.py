@@ -51,6 +51,10 @@ class MockTokenizer:
                 if not ids:
                     ids = [0]
                 self.input_ids = torch.tensor([ids])
+                self.attention_mask = torch.ones_like(self.input_ids)
+                
+            def get(self, key, default=None):
+                return getattr(self, key, default)
 
         return MockOutput(self.encode(text))
 
@@ -69,7 +73,7 @@ class MockDecisionModel:
     def device_type(self):
         return "cpu"
 
-    def prefill(self, input_ids: torch.Tensor, cache: Any = None) -> Tuple[torch.Tensor, Any]:
+    def prefill(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None) -> Tuple[torch.Tensor, Any]:
         # Return dummy logits of shape [1, seq_len, vocab_size].
         # seq_len is always >= 1 because MockTokenizer.__call__ injects a sentinel.
         vocab_size = 100
@@ -94,7 +98,7 @@ class MockDecisionModel:
         logits[0, -1, 5] = 4.0
         return logits, cache if cache is not None else {"mock_cache": True}
 
-    def decode(self, token_ids: torch.Tensor, cache: Any = None) -> Tuple[torch.Tensor, Any]:
+    def decode(self, token_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None) -> Tuple[torch.Tensor, Any]:
         # Dummy decode for multi-token sequence scoring.
         vocab_size = 100
         logits = torch.zeros(1, 1, vocab_size)

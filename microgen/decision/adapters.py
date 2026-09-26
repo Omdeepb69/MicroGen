@@ -21,10 +21,10 @@ class DecisionModel(Protocol):
         """The string device type (e.g., 'cpu', 'cuda')."""
         ...
         
-    def prefill(self, input_ids: torch.Tensor, cache: Any = None) -> Tuple[torch.Tensor, Any]:
+    def prefill(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None) -> Tuple[torch.Tensor, Any]:
         """Run the initial prefill pass and return (logits, updated_cache)."""
         ...
         
-    def decode(self, token_ids: torch.Tensor, cache: Any = None) -> Tuple[torch.Tensor, Any]:
+    def decode(self, token_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None) -> Tuple[torch.Tensor, Any]:
         """Run a single-token decode pass and return (logits, updated_cache)."""
         ...

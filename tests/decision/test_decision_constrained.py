@@ -47,9 +47,9 @@ def test_build_candidate_trie():
 
 
 class DummyDecodeCache:
-    def __init__(self):
+    def __init__(self, decode_calls=None):
         self.seq_len = 10
-        self.decode_calls = 0
+        self.decode_calls = decode_calls if decode_calls is not None else [0]
         
     def get_seq_length(self):
         return self.seq_len
@@ -57,12 +57,25 @@ class DummyDecodeCache:
     def rollback(self, steps):
         self.seq_len -= steps
 
+    def expand_batch(self, batch_size: int):
+        new_cache = DummyDecodeCache(decode_calls=self.decode_calls)
+        new_cache.seq_len = self.seq_len
+        return new_cache
 
-def mock_decode(tokens: torch.Tensor, cache: DummyDecodeCache) -> tuple[torch.Tensor, DummyDecodeCache]:
-    cache.seq_len += 1
-    cache.decode_calls += 1
-    logits = torch.zeros(1, 10)
-    logits[0, 5] = 10.0 # Just some mock values
+    def gather_batch(self, indices: torch.Tensor):
+        new_cache = DummyDecodeCache(decode_calls=self.decode_calls)
+        new_cache.seq_len = self.seq_len
+        return new_cache
+
+
+def mock_decode(tokens: torch.Tensor, attention_mask=None, cache=None) -> tuple[torch.Tensor, DummyDecodeCache]:
+    if cache is not None:
+        cache.seq_len += 1
+        cache.decode_calls[0] += 1
+    
+    batch_size = tokens.shape[0]
+    logits = torch.zeros(batch_size, 1, 10)
+    logits[:, 0, 5] = 10.0 # Just some mock values
     return logits, cache
 
 
@@ -75,13 +88,11 @@ def test_constrained_trie_scoring_reduces_decodes():
     
     # If scored independently, token_ids=[1,2,3] requires 2 decodes (for 2 and 3).
     # Two such candidates = 4 decodes.
-    # With a Trie:
-    # root (-1) -> 1 -> 2 -> 3
-    #                     -> 4
-    # Depth 1: no decode
-    # Depth 2 (node 2): 1 decode
-    # Depth 3 (node 3 and 4): 2 decodes
-    # Total decodes = 3.
+    # With a Batched BFS Trie:
+    # Depth 1 (node 1): no decode
+    # Depth 2 (node 2): 1 batched decode (batch_size=1)
+    # Depth 3 (node 3 and 4): 1 batched decode (batch_size=2)
+    # Total decodes = 2.
     
     cache = DummyDecodeCache()
     last_logits = torch.zeros(10)
@@ -95,7 +106,7 @@ def test_constrained_trie_scoring_reduces_decodes():
         device=torch.device("cpu"),
     )
     
-    assert cache.decode_calls == 3
+    assert cache.decode_calls[0] == 2
 
 
 def test_constrained_trie_integration(mock_decision_model):

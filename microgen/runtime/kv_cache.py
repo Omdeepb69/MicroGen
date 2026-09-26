@@ -209,6 +209,50 @@ class KVCacheState(Cache):
         else:
             self._seen_tokens = 0
 
+    def expand_batch(self, batch_size: int) -> "KVCacheState":
+        """Create a new KVCacheState by expanding the batch dimension (dim 0).
+        Assumes current batch size is 1.
+        """
+        new_cache = KVCacheState(
+            max_seq_len=self.max_seq_len,
+            sliding_window_size=self.sliding_window_size,
+            quantize_kv=self.quantize_kv,
+        )
+        for i in range(len(self.key_cache)):
+            k = self.key_cache[i]
+            v = self.value_cache[i]
+            ks = self.key_scales[i]
+            vs = self.value_scales[i]
+            
+            new_cache.key_cache.append(k.expand(batch_size, *k.shape[1:]).contiguous() if k is not None else None)
+            new_cache.value_cache.append(v.expand(batch_size, *v.shape[1:]).contiguous() if v is not None else None)
+            new_cache.key_scales.append(ks.expand(batch_size, *ks.shape[1:]).contiguous() if ks is not None else None)
+            new_cache.value_scales.append(vs.expand(batch_size, *vs.shape[1:]).contiguous() if vs is not None else None)
+            
+        new_cache._seen_tokens = self._seen_tokens
+        return new_cache
+
+    def gather_batch(self, indices: torch.Tensor) -> "KVCacheState":
+        """Create a new KVCacheState by selecting batch indices along dim 0."""
+        new_cache = KVCacheState(
+            max_seq_len=self.max_seq_len,
+            sliding_window_size=self.sliding_window_size,
+            quantize_kv=self.quantize_kv,
+        )
+        for i in range(len(self.key_cache)):
+            k = self.key_cache[i]
+            v = self.value_cache[i]
+            ks = self.key_scales[i]
+            vs = self.value_scales[i]
+            
+            new_cache.key_cache.append(k.index_select(0, indices) if k is not None else None)
+            new_cache.value_cache.append(v.index_select(0, indices) if v is not None else None)
+            new_cache.key_scales.append(ks.index_select(0, indices) if ks is not None else None)
+            new_cache.value_scales.append(vs.index_select(0, indices) if vs is not None else None)
+            
+        new_cache._seen_tokens = self._seen_tokens
+        return new_cache
+
 
 class KVCacheManager:
     """Manages allocation, retrieval, and deallocation of per-request KV cache states."""

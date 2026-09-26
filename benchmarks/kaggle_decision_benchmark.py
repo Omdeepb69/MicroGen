@@ -2,8 +2,15 @@
 # ============================================================
 #  MicroGen Decision Engine — Full Research Benchmark Suite
 #  One-cell Kaggle T4 GPU script
-#  v1.1.0  |  2026-09-26
+#  v1.2.0  |  2026-09-26
 # ============================================================
+#
+#  Changes in v1.2.0
+#    - Strict A/B/C/D generation baseline (no substring parsing)
+#    - Engine Permutation Invariance: fixed prompt, permuted schema
+#    - Prompt Option-Order Sensitivity: separate generation test
+#    - Explicit attention_mask passing throughout
+#    - Batched BFS Trie (replaces sequential DFS)
 #
 #  Experiments
 #    A. Normal LLM generation  (generate → parse)
@@ -30,7 +37,7 @@ import subprocess, sys
 
 # ── 0. Install ──────────────────────────────────────────────
 for pkg in [
-    "microgen-llm==1.1.0",
+    "microgen-llm==1.2.0",
     "datasets>=2.14",
     "scipy>=1.10",
     "tabulate>=0.9",
@@ -67,9 +74,9 @@ if DEVICE.type == "cuda":
 
 # ── 3. Benchmark config ──────────────────────────────────────
 MODEL_ID       = "Qwen/Qwen2.5-1.5B-Instruct"
-N_EVAL         = 150   # evaluation examples per dataset
-N_CALIB        = 50    # examples for temperature scaler calibration
-N_PERMUTATIONS = 15    # option-order permutation trials
+N_EVAL         = 1000  # evaluation examples per dataset
+N_CALIB_MIN    = 50    # minimum examples per class for Temperature Scaler
+N_PERMUTATIONS = 10    # option-order permutation trials
 
 # ── 4. Dataset registry ──────────────────────────────────────
 # Fields: path, name, split, text_field, label_field, label_names (None = from features)
@@ -185,27 +192,41 @@ def build_prompt(text: str, label_names: list[str]) -> str:
         f"Category:"
     )
 
+def build_strict_generation_prompt(text: str, label_names: list[str]) -> tuple[str, dict[str, str]]:
+    """Strict A/B/C/D prompt for generation."""
+    import string as _string
+    letters = list(_string.ascii_uppercase)
+    mapping = {letters[i]: name for i, name in enumerate(label_names)}
+    options_text = "\n".join(f"{k} = {v}" for k, v in mapping.items())
+    valid_letters = "/".join(mapping.keys())
+    prompt = (
+        f"Classify the text into exactly one category.\n\n"
+        f"Options:\n{options_text}\n\n"
+        f"Text: {text}\n\n"
+        f"Output ONLY the letter ({valid_letters}):"
+    )
+    return prompt, mapping
+
 
 # ── 8. Experiment implementations ───────────────────────────
 
 @torch.no_grad()
 def run_generation(text: str, label_names: list[str]) -> tuple[str, float]:
-    """Experiment A: standard autoregressive generation + parse."""
-    prompt = build_prompt(text, label_names)
+    """Experiment A: strict A/B/C/D generation baseline."""
+    prompt, mapping = build_strict_generation_prompt(text, label_names)
     ids = tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
     out = model.generate(
         ids,
-        max_new_tokens=12,
+        max_new_tokens=2,
         do_sample=False,
         pad_token_id=tokenizer.eos_token_id,
     )
     generated = tokenizer.decode(
         out[0][ids.shape[1]:], skip_special_tokens=True
-    ).strip().lower()
-    # Best-effort parse: first label found in output (case-insensitive)
-    for lbl in label_names:
-        if lbl.lower() in generated:
-            return lbl, 1.0
+    ).strip().upper()
+    for letter, label in mapping.items():
+        if letter in generated:
+            return label, 1.0
     return label_names[0], 1.0  # fallback
 
 
@@ -243,45 +264,38 @@ def permutation_invariance_test(
     n_permutations: int = N_PERMUTATIONS,
 ) -> dict:
     """
-    Runs N permutations of label_names and computes KL(P_original || P_permuted)
-    for both generation (should be HIGH — position bias) and
-    MicroGen (should be ZERO — invariant by construction).
-    Returns mean KL for each method.
+    Two distinct tests:
+    1. Engine Invariance: fixed prompt context, permuted ChoiceSchema order. KL≈0.
+    2. Prompt Sensitivity: permuted Categories text in prompt, measure generation flip rate.
     """
-    _, _, probs_orig = run_microgen(text, label_names)
+    # 1. Engine invariance — fixed prompt, permuted schema
+    fixed_context = build_prompt(text, label_names)
+    schema_orig = ChoiceSchema(name="cls", options=[Choice(n) for n in label_names])
+    result_orig = engine.choose(context=fixed_context, schema=schema_orig)
+    probs_orig = [result_orig.probabilities.get(n, 0.0) for n in label_names]
 
-    kl_microgen   = []
-    kl_generation = []
-
+    kl_microgen = []
     for _ in range(n_permutations):
         shuffled = label_names.copy()
         random.shuffle(shuffled)
+        schema_perm = ChoiceSchema(name="cls", options=[Choice(n) for n in shuffled])
+        result_perm = engine.choose(context=fixed_context, schema=schema_perm)
+        probs_perm = [result_perm.probabilities.get(n, 0.0) for n in label_names]
+        kl_microgen.append(kl_divergence(probs_orig, probs_perm))
 
-        # MicroGen
-        _, _, probs_perm = run_microgen(text, shuffled)
-        # Re-align to original ordering
-        probs_aligned = [probs_perm[shuffled.index(n)] for n in label_names]
-        kl_microgen.append(kl_divergence(probs_orig, probs_aligned))
-
-        # Generation — parse gives 1-hot (no distribution), so we measure
-        # whether the *predicted label* changes under permutation
+    # 2. Prompt sensitivity — permuted Categories line, generation flip rate
+    pred_orig, _ = run_generation(text, label_names)
+    gen_changed = []
+    for _ in range(n_permutations):
+        shuffled = label_names.copy()
+        random.shuffle(shuffled)
         pred_perm, _ = run_generation(text, shuffled)
-        # Encode as 1-hot over original ordering for KL
-        gen_perm_dist = [1.0 if n == pred_perm else 0.0 for n in label_names]
-        # We compare against the original generation prediction
-        # Capture original gen prediction just for this text
-        pred_orig, _ = run_generation(text, label_names)
-        gen_orig_dist = [1.0 if n == pred_orig else 0.0 for n in label_names]
-        # KL between hard 1-hots is either 0 or inf (same/different prediction)
-        kl_generation.append(0.0 if pred_orig == pred_perm else float("inf"))
-
-    # Count finite KL divergences for generation
-    gen_changed_frac = np.mean([k > 0 for k in kl_generation]) * 100.0
+        gen_changed.append(0.0 if pred_orig == pred_perm else 1.0)
 
     return {
-        "microgen_mean_kl": float(np.mean(kl_microgen)),
-        "microgen_max_kl":  float(np.max(kl_microgen)),
-        "gen_pct_pred_changed": gen_changed_frac,
+        "microgen_mean_kl":     float(np.mean(kl_microgen)),
+        "microgen_max_kl":      float(np.max(kl_microgen)),
+        "gen_pct_pred_changed": float(np.mean(gen_changed) * 100.0),
     }
 
 

@@ -35,27 +35,34 @@ class TransformersDecisionModel(DecisionModel):
 
     @torch.no_grad()
     def prefill(
-        self, input_ids: torch.Tensor, cache: Any = None
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None
     ) -> Tuple[torch.Tensor, Any]:
         """Run the initial prefill pass and return (logits, updated_cache)."""
-        outputs = self._model(
-            input_ids=input_ids,
-            past_key_values=cache,
-            use_cache=True,
-            return_dict=True,
-        )
+        kwargs = {
+            "input_ids": input_ids,
+            "past_key_values": cache,
+            "use_cache": True,
+            "return_dict": True,
+        }
+        if attention_mask is not None:
+            kwargs["attention_mask"] = attention_mask
+            
+        outputs = self._model(**kwargs)
         return outputs.logits, outputs.past_key_values
 
     @torch.no_grad()
     def decode(
-        self, token_ids: torch.Tensor, cache: Any = None
+        self, token_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, cache: Any = None
     ) -> Tuple[torch.Tensor, Any]:
         """Run a single-token decode pass and return (logits, updated_cache)."""
-        # For decoding step, we just provide the new token(s) and the past_key_values cache.
-        outputs = self._model(
-            input_ids=token_ids,
-            past_key_values=cache,
-            use_cache=True,
-            return_dict=True,
-        )
+        kwargs = {
+            "input_ids": token_ids,
+            "past_key_values": cache,
+            "use_cache": True,
+            "return_dict": True,
+        }
+        if attention_mask is not None:
+            kwargs["attention_mask"] = attention_mask
+            
+        outputs = self._model(**kwargs)
         return outputs.logits, outputs.past_key_values

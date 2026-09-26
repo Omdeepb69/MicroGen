@@ -47,7 +47,7 @@ def build_candidate_trie(candidates: list[CandidateStats]) -> TrieNode:
 def score_trie_candidates(
     last_logits: torch.Tensor,
     candidates: list[CandidateStats],
-    decode_fn: Callable[[torch.Tensor, Any], Tuple[torch.Tensor, Any]],
+    decode_fn: Callable[..., Tuple[torch.Tensor, Any]],
     prefill_cache: Any,
     device: torch.device,
     alpha: float = 1.0,
@@ -75,47 +75,83 @@ def score_trie_candidates(
     raw_log_probs = [0.0] * len(candidates)
     
     # Pre-calculate softmax over prefill logits for depth-1 nodes
+    # last_logits is [vocab_size]
     first_probs = torch.softmax(last_logits, dim=-1)
 
-    # 3. Recursive DFS to score all paths
-    def dfs(node: TrieNode, current_log_prob: float, cache: Any):
-        # If any candidates end exactly at this node, store their log_prob
-        for idx in node.candidate_indices:
-            raw_log_probs[idx] = current_log_prob
+    # 3. BFS Batched Frontier setup
+    frontier_nodes: list[TrieNode] = []
+    frontier_log_probs: list[float] = []
 
-        # Fast path if no children
-        if not node.children:
-            return
+    # Process depth-1 children of the root node
+    for child_token, child_node in root.children.items():
+        child_p = first_probs[child_token].item() + 1e-45
+        child_log_prob = math.log(child_p)
+        
+        # If candidates end exactly here, store their log_prob
+        for idx in child_node.candidate_indices:
+            raw_log_probs[idx] = child_log_prob
+            
+        # Add to frontier if it has further children
+        if child_node.children:
+            frontier_nodes.append(child_node)
+            frontier_log_probs.append(child_log_prob)
 
-        # Record cache length before decoding children so we can rollback
-        initial_cache_len = cache.get_seq_length()
-
-        for child_token, child_node in node.children.items():
-            if node.token_id == -1:
-                # Depth-1: log_prob comes from prefill logits, no decoding yet.
-                # No cache update required.
-                child_p = first_probs[child_token].item() + 1e-45
-                child_log_prob = current_log_prob + math.log(child_p)
-                dfs(child_node, child_log_prob, cache)
+    if frontier_nodes:
+        # We have active branches at depth > 1. Expand cache to match frontier size.
+        current_cache = prefill_cache.expand_batch(len(frontier_nodes))
+        
+        # BFS loop
+        while frontier_nodes:
+            next_nodes: list[TrieNode] = []
+            next_log_probs: list[float] = []
+            parent_indices: list[int] = []
+            
+            # Prepare batched input for the current frontier
+            input_ids = torch.tensor([[node.token_id] for node in frontier_nodes], device=device)
+            
+            # Batched forward pass
+            step_logits, next_cache = decode_fn(input_ids, cache=current_cache)
+            
+            # Extract last token logits for the batch: shape [B, vocab_size]
+            if step_logits.ndim == 3:
+                step_last = step_logits[:, -1, :]
             else:
-                # Depth > 1: we must decode from the parent's token
-                prev_token = torch.tensor([[node.token_id]], device=device)
-                step_logits, next_cache = decode_fn(prev_token, cache)
+                step_last = step_logits
                 
-                step_last = _extract_last_token_logits(step_logits)
-                child_p = torch.softmax(step_last, dim=-1)[child_token].item() + 1e-45
-                child_log_prob = current_log_prob + math.log(child_p)
+            step_probs = torch.softmax(step_last, dim=-1)
+            
+            # Process children
+            for batch_idx, parent_node in enumerate(frontier_nodes):
+                parent_log_prob = frontier_log_probs[batch_idx]
+                parent_probs = step_probs[batch_idx]
                 
-                # Traverse child
-                dfs(child_node, child_log_prob, next_cache)
+                for child_token, child_node in parent_node.children.items():
+                    child_p = parent_probs[child_token].item() + 1e-45
+                    child_log_prob = parent_log_prob + math.log(child_p)
+                    
+                    for idx in child_node.candidate_indices:
+                        raw_log_probs[idx] = child_log_prob
+                        
+                    if child_node.children:
+                        next_nodes.append(child_node)
+                        next_log_probs.append(child_log_prob)
+                        parent_indices.append(batch_idx)
+                        
+            if not next_nodes:
+                break
                 
-                # Rollback cache so the next sibling starts from the correct parent state
-                steps_added = next_cache.get_seq_length() - initial_cache_len
-                if steps_added > 0:
-                    next_cache.rollback(steps_added)
-
-    # Execute DFS
-    dfs(root, 0.0, prefill_cache)
+            frontier_nodes = next_nodes
+            frontier_log_probs = next_log_probs
+            
+            # Gather cache for the active children
+            # Identify the device of the cache tensors to ensure index_select works
+            if hasattr(next_cache, "key_cache") and next_cache.key_cache and next_cache.key_cache[0] is not None:
+                cache_device = next_cache.key_cache[0].device
+            else:
+                cache_device = device
+                
+            indices_tensor = torch.tensor(parent_indices, device=cache_device)
+            current_cache = next_cache.gather_batch(indices_tensor)
 
     # 4. Length normalization and final softmax
     normalized_scores: list[float] = []

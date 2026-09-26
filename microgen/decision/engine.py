@@ -80,14 +80,19 @@ class DecisionEngine:
         tok = self._model.tokenizer
         prompt_encoding = tok(context, return_tensors="pt")
         input_ids: torch.Tensor = prompt_encoding.input_ids
+        attention_mask: torch.Tensor | None = prompt_encoding.get("attention_mask")
 
         # Move to the model's device if needed
         device = torch.device(self._model.device_type)
         input_ids = input_ids.to(device)
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
 
         # Single prefill pass — decode-free
         cache = KVCacheState()
-        logits, _ = self._model.prefill(input_ids, cache=cache)
+        logits, _ = self._model.prefill(
+            input_ids, attention_mask=attention_mask, cache=cache
+        )
         last_logits = _extract_last_token_logits(logits)
 
         # Apply temperature before scoring
