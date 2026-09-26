@@ -37,7 +37,7 @@ import subprocess, sys
 
 # ── 0. Install ──────────────────────────────────────────────
 for pkg in [
-    "microgen-llm==1.2.0",
+    "git+https://github.com/Omdeepb69/MicroGen.git@v1.2.0",
     "datasets>=2.14",
     "scipy>=1.10",
     "tabulate>=0.9",
