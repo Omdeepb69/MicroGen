@@ -2,8 +2,11 @@
 # ============================================================
 #  MicroGen Decision Engine — Full Research Benchmark Suite
 #  One-cell Kaggle T4 GPU script
-#  v1.2.0  |  2026-09-26
+#  v1.2.1  |  2026-09-26
 # ============================================================
+#
+#  Changes in v1.2.1
+#    - Fixed Kaggle T4x2 multi-GPU Tensor device placement in KV Cache gather_batch
 #
 #  Changes in v1.2.0
 #    - Strict A/B/C/D generation baseline (no substring parsing)
@@ -37,12 +40,19 @@ import subprocess, sys
 
 # ── 0. Install ──────────────────────────────────────────────
 for pkg in [
-    "microgen-llm==1.2.0",
+    "microgen-llm==1.2.1",
     "datasets>=2.14",
     "scipy>=1.10",
     "tabulate>=0.9",
 ]:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
+    except subprocess.CalledProcessError:
+        if "microgen-llm" in pkg:
+            print("PyPI cache delay detected, installing from GitHub instead...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "git+https://github.com/Omdeepb69/MicroGen.git@v1.2.1"])
+        else:
+            raise
 
 # ── 1. Imports ──────────────────────────────────────────────
 import os, time, random, math, json, gc

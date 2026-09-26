@@ -245,10 +245,10 @@ class KVCacheState(Cache):
             ks = self.key_scales[i]
             vs = self.value_scales[i]
             
-            new_cache.key_cache.append(k.index_select(0, indices) if k is not None else None)
-            new_cache.value_cache.append(v.index_select(0, indices) if v is not None else None)
-            new_cache.key_scales.append(ks.index_select(0, indices) if ks is not None else None)
-            new_cache.value_scales.append(vs.index_select(0, indices) if vs is not None else None)
+            new_cache.key_cache.append(k.index_select(0, indices.to(k.device)) if k is not None else None)
+            new_cache.value_cache.append(v.index_select(0, indices.to(v.device)) if v is not None else None)
+            new_cache.key_scales.append(ks.index_select(0, indices.to(ks.device)) if ks is not None else None)
+            new_cache.value_scales.append(vs.index_select(0, indices.to(vs.device)) if vs is not None else None)
             
         new_cache._seen_tokens = self._seen_tokens
         return new_cache
