@@ -37,7 +37,7 @@ import subprocess, sys
 
 # ── 0. Install ──────────────────────────────────────────────
 for pkg in [
-    "git+https://github.com/Omdeepb69/MicroGen.git@v1.2.0",
+    "microgen-llm==1.2.0",
     "datasets>=2.14",
     "scipy>=1.10",
     "tabulate>=0.9",
@@ -317,11 +317,15 @@ def run_dataset(ds_cfg: dict) -> dict:
     # Shuffle and split
     indices = list(range(len(ds)))
     random.shuffle(indices)
-    calib_idx = indices[:N_CALIB]
-    eval_idx  = indices[N_CALIB:N_CALIB + N_EVAL]
+    
+    n_calib = min(max(N_CALIB_MIN, N_CALIB_MIN * n_classes), len(ds) // 5, 1000)
+    n_eval_clamped = min(N_EVAL, len(ds) - n_calib)
+
+    calib_idx = indices[:n_calib]
+    eval_idx  = indices[n_calib:n_calib + n_eval_clamped]
 
     # ── Calibration fit ──────────────────────────────────────
-    print(f"\n  Fitting TemperatureScaler on {N_CALIB} examples ...")
+    print(f"\n  Fitting TemperatureScaler on {n_calib} examples ...")
     calib_results, calib_labels = [], []
     for i in calib_idx:
         row  = ds[i]
@@ -466,7 +470,7 @@ print("  MicroGen Decision Engine — Research Benchmark Suite")
 print("=" * 64)
 print(f"  Model:   {MODEL_ID}")
 print(f"  Evals:   {N_EVAL} / dataset")
-print(f"  Calib:   {N_CALIB} / dataset (for Temperature Scaler)")
+print(f"  Calib:   {N_CALIB_MIN} (min) / class (for Temperature Scaler)")
 print(f"  Perms:   {N_PERMUTATIONS} (option-order invariance test)")
 print("=" * 64)
 
