@@ -4,7 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-149%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-64%20decision%20%7C%20149%20total-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **MicroGen** (`microgen-llm` on PyPI) is a modular, hardware-aware Large Language Model (LLM) inference research framework and experimental substrate built from scratch in PyTorch. Designed to dissect memory, latency, and throughput trade-offs under controlled hardware and workload conditions, MicroGen isolates state-of-the-art serving techniques including **Physical Paged KV Allocation**, **Hash-Based Prefix Reuse**, **INT8 Weight Quantization**, **Multi-GPU Tensor Parallelism**, **Speculative Decoding**, and **Continuous Request Batching**.
@@ -137,7 +137,53 @@ output = tp_engine.generate("Distributed tensor parallelism scales decoding", ma
 print("TP Output:", output)
 ```
 
-### 4. OpenAI-Compatible HTTP Serving & SSE Streaming
+### 4. 🧠 Decode-Free Decision Engine (v1.1.0+)
+Turn any causal LM into a **probabilistic decision engine** without generating a single token.
+Constrained scoring evaluates all candidates in one pass — with zero position bias.
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from microgen.decision.huggingface import TransformersDecisionModel
+from microgen.decision.engine import DecisionEngine
+from microgen.decision.schema import Choice, ChoiceSchema
+
+# Wrap any HuggingFace causal model
+tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
+model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM-135M")
+engine = DecisionEngine(TransformersDecisionModel(model, tokenizer))
+
+context = "The drone is 5 meters from a building."
+
+# Binary yes/no question — no generation, just logit comparison
+result = engine.yes_no(context=context, question="Is the drone in danger?")
+print(result.choice)           # "YES"
+print(result.top_probability)  # 0.9508
+print(result.entropy)          # 0.2829 bits
+
+# Multi-token structured choice with Trie-based constrained decoding
+schema = ChoiceSchema(name="action", options=[
+    Choice("TURN LEFT"), Choice("PULL UP"),
+    Choice("BRAKE"),     Choice("CONTINUE"),
+])
+result = engine.choose(context=context, schema=schema)
+print(result.choice)         # "TURN LEFT"
+print(result.probabilities)  # {"TURN LEFT": 0.67, "CONTINUE": 0.19, ...}
+
+# Temperature-scale the distribution to reduce overconfidence
+from microgen.decision.calibration import TemperatureScaler
+scaler = TemperatureScaler()
+scaler.fit(validation_results, true_labels)  # fit on a labelled set
+calibrated = scaler.transform(result)        # ECE: 39.8% → 28.4%
+```
+
+**Key properties:**
+- **Zero-decode**: No token generation; scores candidates directly from logits.
+- **Trie-based Constrained Decoding**: Shared token prefixes computed once — eliminates redundant forward passes.
+- **Option-Order Invariance**: Proven $D_{KL}(P_{original} \| P_{permuted}) = 0.0$ across all permutations.
+- **Temperature Calibration**: Fits a temperature parameter $T$ via L-BFGS to reduce Expected Calibration Error.
+- **Entropy Diagnostics**: Every `DecisionResult` carries Shannon entropy over the candidate distribution.
+
+### 5. OpenAI-Compatible HTTP Serving & SSE Streaming
 Start the HTTP API server:
 ```bash
 microgen serve --host 0.0.0.0 --port 8000 --model sshleifer/tiny-gpt2
