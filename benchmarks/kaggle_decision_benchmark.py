@@ -2,11 +2,12 @@
 # ============================================================
 #  MicroGen Decision Engine — Full Research Benchmark Suite
 #  One-cell Kaggle T4 GPU script
-#  v1.2.1  |  2026-09-26
+#  v1.2.2  |  2026-09-26
 # ============================================================
 #
-#  Changes in v1.2.1
-#    - Fixed Kaggle T4x2 multi-GPU Tensor device placement in KV Cache gather_batch
+#  Changes in v1.2.2
+#    - Changed generation baseline to use numbers to support N>26 classes
+#    - Fixed attention_mask warning in Generation baseline
 #
 #  Changes in v1.2.0
 #    - Strict A/B/C/D generation baseline (no substring parsing)
@@ -40,7 +41,7 @@ import subprocess, sys
 
 # ── 0. Install ──────────────────────────────────────────────
 for pkg in [
-    "microgen-llm==1.2.1",
+    "microgen-llm==1.2.2",
     "datasets>=2.14",
     "scipy>=1.10",
     "tabulate>=0.9",
@@ -50,7 +51,7 @@ for pkg in [
     except subprocess.CalledProcessError:
         if "microgen-llm" in pkg:
             print("PyPI cache delay detected, installing from GitHub instead...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "git+https://github.com/Omdeepb69/MicroGen.git@v1.2.1"])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "git+https://github.com/Omdeepb69/MicroGen.git@v1.2.2"])
         else:
             raise
 
@@ -203,17 +204,14 @@ def build_prompt(text: str, label_names: list[str]) -> str:
     )
 
 def build_strict_generation_prompt(text: str, label_names: list[str]) -> tuple[str, dict[str, str]]:
-    """Strict A/B/C/D prompt for generation."""
-    import string as _string
-    letters = list(_string.ascii_uppercase)
-    mapping = {letters[i]: name for i, name in enumerate(label_names)}
+    """Strict integer prompt for generation (supports >26 classes)."""
+    mapping = {str(i + 1): name for i, name in enumerate(label_names)}
     options_text = "\n".join(f"{k} = {v}" for k, v in mapping.items())
-    valid_letters = "/".join(mapping.keys())
     prompt = (
         f"Classify the text into exactly one category.\n\n"
         f"Options:\n{options_text}\n\n"
         f"Text: {text}\n\n"
-        f"Output ONLY the letter ({valid_letters}):"
+        f"Output ONLY the category number:"
     )
     return prompt, mapping
 
@@ -222,21 +220,32 @@ def build_strict_generation_prompt(text: str, label_names: list[str]) -> tuple[s
 
 @torch.no_grad()
 def run_generation(text: str, label_names: list[str]) -> tuple[str, float]:
-    """Experiment A: strict A/B/C/D generation baseline."""
+    """Experiment A: strict integer generation baseline."""
     prompt, mapping = build_strict_generation_prompt(text, label_names)
-    ids = tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
+    encoded = tokenizer(prompt, return_tensors="pt")
+    ids = encoded.input_ids.to(DEVICE)
+    mask = encoded.attention_mask.to(DEVICE)
     out = model.generate(
         ids,
-        max_new_tokens=2,
+        attention_mask=mask,
+        max_new_tokens=4,
         do_sample=False,
         pad_token_id=tokenizer.eos_token_id,
     )
     generated = tokenizer.decode(
         out[0][ids.shape[1]:], skip_special_tokens=True
-    ).strip().upper()
-    for letter, label in mapping.items():
-        if letter in generated:
-            return label, 1.0
+    ).strip()
+    
+    # Try exact match first
+    if generated in mapping:
+        return mapping[generated], 1.0
+        
+    # Fallback: extract the first sequence of digits
+    import re
+    match = re.search(r'\b(\d+)\b', generated)
+    if match and match.group(1) in mapping:
+        return mapping[match.group(1)], 1.0
+        
     return label_names[0], 1.0  # fallback
 
 
