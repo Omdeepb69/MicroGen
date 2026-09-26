@@ -1,255 +1,219 @@
-"""Calibration Scaling Benchmark.
+#!/usr/bin/env python3
+# ============================================================
+#  MicroGen Decision Engine — Task 7.2
+#  Calibration-Set Size Curve
+# ============================================================
+#
+# Investigates how Temperature Scaling behaves as a function of
+# calibration-set size, specifically targeting the instability
+# observed on the 77-class Banking77 dataset.
+#
+# Run this via Kaggle T4 or locally.
 
-Evaluates how the number of calibration examples affects Temperature Scaling
-quality across ECE, NLL, and Brier score. Runs BoolQ at a single large
-evaluation budget, then calibrates using progressively larger subsets to show
-how calibration quality scales with sample count.
-
-Task 6.3 scope: N_calib ∈ {50, 100, 250, 500, 1000}.
-"""
-
-import argparse
-import math
 import time
-from typing import NamedTuple
-
+import json
+import math
 import numpy as np
 import torch
-from datasets import load_dataset
+from tabulate import tabulate
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from datasets import load_dataset
 
-from microgen.decision.calibration import TemperatureScaler
-from microgen.decision.engine import DecisionEngine
 from microgen.decision.huggingface import TransformersDecisionModel
-from microgen.decision.schema import DecisionResult
+from microgen.decision.engine import DecisionEngine
+from microgen.decision.schema import Choice, ChoiceSchema
+from microgen.decision.calibration import TemperatureScaler
 
+def accuracy(preds, labels):
+    return float(np.mean([p == l for p, l in zip(preds, labels)])) * 100.0
 
-# ── Calibration metrics ──────────────────────────────────────────────────────
-
-def expected_calibration_error(
-    confidences: list[float],
-    accuracies: list[float],
-    num_bins: int = 10,
-) -> float:
-    """ECE using equal-width bins."""
-    bins = np.linspace(0, 1, num_bins + 1)
-    n = len(confidences)
-    ece = 0.0
-    for lo, hi in zip(bins[:-1], bins[1:]):
-        mask = [i for i, c in enumerate(confidences) if lo < c <= hi]
-        if not mask:
+def ece_score(confidences, correct_flags, n_bins=10):
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    confs  = np.array(confidences)
+    flags  = np.array(correct_flags, dtype=float)
+    total  = len(confs)
+    ece    = 0.0
+    for i in range(n_bins):
+        lo, hi = bins[i], bins[i + 1]
+        mask = (confs > lo) & (confs <= hi)
+        if i == 0:
+            mask |= confs == 0.0
+        n = mask.sum()
+        if n == 0:
             continue
-        bin_conf = np.mean([confidences[i] for i in mask])
-        bin_acc = np.mean([accuracies[i] for i in mask])
-        ece += (len(mask) / n) * abs(bin_acc - bin_conf)
-    return float(ece)
+        ece += (n / total) * abs(flags[mask].mean() - confs[mask].mean())
+    return float(ece) * 100.0
 
-
-def brier_score(
-    prob_lists: list[list[float]],
-    true_indices: list[int],
-) -> float:
-    """Multiclass Brier score: mean squared error between prob vector and one-hot."""
-    total = 0.0
+def brier_score(prob_lists, true_indices, n_classes):
+    scores = []
     for probs, idx in zip(prob_lists, true_indices):
-        onehot = np.zeros(len(probs))
+        onehot = np.zeros(n_classes)
         onehot[idx] = 1.0
-        total += float(np.sum((np.array(probs) - onehot) ** 2))
-    return total / len(prob_lists)
+        scores.append(np.sum((np.array(probs) - onehot) ** 2))
+    return float(np.mean(scores))
 
-
-def nll_score(
-    prob_lists: list[list[float]],
-    true_indices: list[int],
-) -> float:
-    """Negative log-likelihood."""
+def nll_score(prob_lists, true_indices):
     return float(np.mean([
         -math.log(max(probs[idx], 1e-15))
         for probs, idx in zip(prob_lists, true_indices)
     ]))
 
+def build_prompt(text: str, label_names: list[str]) -> str:
+    labels = " | ".join(label_names)
+    return (
+        f"Classify the text into exactly one of the following categories.\n"
+        f"Categories: {labels}\n\n"
+        f"Text: {text}\n"
+        f"Category:"
+    )
 
-# ── Result container ─────────────────────────────────────────────────────────
+def main():
+    # ── 1. Environment & Setup ──────────────────────────────────
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct" if DEVICE.type == "cuda" else "HuggingFaceTB/SmolLM-135M"
+    
+    # Fast parameters for CPU testing, large parameters for GPU paper-run
+    if DEVICE.type == "cuda":
+        N_EVAL = 1000
+        CALIB_SIZES = [50, 100, 250, 500, 1000, 2000]
+    else:
+        N_EVAL = 100
+        CALIB_SIZES = [10, 20, 50, 100]
 
-class CalibMetrics(NamedTuple):
-    n_calib: int
-    temperature: float
-    ece_before: float
-    ece_after: float
-    brier_before: float
-    brier_after: float
-    nll_before: float
-    nll_after: float
+    print("=" * 70)
+    print("  Task 7.2: Calibration-Set Size Curve")
+    print("=" * 70)
+    print(f"  Device: {DEVICE}")
+    print(f"  Model:  {MODEL_ID}")
+    print(f"  Eval:   {N_EVAL} test items")
+    print(f"  Calib:  {CALIB_SIZES}")
+    print("=" * 70)
 
-
-# ── Main benchmark ────────────────────────────────────────────────────────────
-
-def run(
-    n_eval: int = 1000,
-    calib_sizes: list[int] | None = None,
-    model_name: str = "HuggingFaceTB/SmolLM-135M",
-    seed: int = 42,
-) -> None:
-    if calib_sizes is None:
-        calib_sizes = [50, 100, 250, 500, 1000]
-
-    # Clamp calib sizes to n_eval
-    calib_sizes = [n for n in calib_sizes if n <= n_eval]
-
-    print(f"Model: {model_name}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # ── 2. Load Model ───────────────────────────────────────────
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    dtype = torch.float16 if DEVICE.type == "cuda" else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        dtype=torch.float16 if device.type == "cuda" else torch.float32,
-    ).to(device)
+        MODEL_ID,
+        dtype=dtype,
+        device_map="auto" if DEVICE.type == "cuda" else None,
+    )
+    if DEVICE.type == "cpu":
+        model.to(DEVICE)
     model.eval()
 
     adapter = TransformersDecisionModel(model, tokenizer)
     engine = DecisionEngine(adapter)
 
-    print("Downloading BoolQ validation split...")
-    dataset = load_dataset("google/boolq", split="validation")
-    dataset = dataset.shuffle(seed=seed).select(range(min(n_eval, len(dataset))))
+    # ── 3. Dataset Setup (Banking77) ────────────────────────────
+    print("\nLoading Banking77 ...")
+    ds_train = load_dataset("legacy-datasets/banking77", split="train")
+    ds_test = load_dataset("legacy-datasets/banking77", split="test")
+    
+    label_names = ds_train.features["label"].names
+    n_classes = len(label_names)
+    schema = ChoiceSchema(name="banking77", options=[Choice(n) for n in label_names])
+    
+    # Shuffle splits
+    np.random.seed(42)
+    train_idx = np.random.permutation(len(ds_train))
+    test_idx = np.random.permutation(len(ds_test))
 
-    print(f"\nEvaluating {len(dataset)} items...")
-    results_raw: list[DecisionResult] = []
-    true_labels: list[str] = []
-    t0 = time.time()
+    max_calib = max(CALIB_SIZES)
+    calib_pool_idx = train_idx[:max_calib]
+    eval_pool_idx = test_idx[:N_EVAL]
 
-    for i, item in enumerate(dataset):
-        label = "YES" if item["answer"] else "NO"
-        true_labels.append(label)
-        result = engine.yes_no(
-            context=f"Passage: {item['passage']}",
-            question=item["question"],
-        )
-        results_raw.append(result)
-        if (i + 1) % 100 == 0:
-            print(f"  {i + 1}/{len(dataset)} ({time.time()-t0:.1f}s)")
+    # ── 4. Precompute Engine Results ────────────────────────────
+    print(f"\nPrecomputing {max_calib} calibration outputs ...")
+    calib_results = []
+    calib_labels = []
+    for rank, idx in enumerate(calib_pool_idx):
+        if (rank + 1) % 50 == 0:
+            print(f"  {rank+1}/{max_calib} ...")
+        text = ds_train[int(idx)]["text"]
+        label = label_names[ds_train[int(idx)]["label"]]
+        ctx = build_prompt(text, label_names)
+        with torch.no_grad():
+            res = engine.choose(context=ctx, schema=schema)
+        calib_results.append(res)
+        calib_labels.append(label)
 
-    print(f"Inference complete in {time.time()-t0:.1f}s\n")
+    print(f"\nPrecomputing {N_EVAL} evaluation outputs ...")
+    eval_results = []
+    eval_true_labels = []
+    eval_true_indices = []
+    for rank, idx in enumerate(eval_pool_idx):
+        if (rank + 1) % 50 == 0:
+            print(f"  {rank+1}/{N_EVAL} ...")
+        text = ds_test[int(idx)]["text"]
+        l_idx = ds_test[int(idx)]["label"]
+        label = label_names[l_idx]
+        ctx = build_prompt(text, label_names)
+        with torch.no_grad():
+            res = engine.choose(context=ctx, schema=schema)
+        eval_results.append(res)
+        eval_true_labels.append(label)
+        eval_true_indices.append(l_idx)
 
-    # Build raw metric arrays once — calibration only changes the temperature
-    label_list = ["YES", "NO"]
-    uncal_conf = [r.top_probability for r in results_raw]
-    uncal_acc = [1.0 if r.choice == t else 0.0 for r, t in zip(results_raw, true_labels)]
-    uncal_probs = [
-        [r.probabilities.get("YES", 0.0), r.probabilities.get("NO", 0.0)]
-        for r in results_raw
+    # ── 5. Run Calibration Curve ────────────────────────────────
+    print("\nRunning Calibration-Set Size Curve ...")
+    
+    # Baseline Uncalibrated
+    uncal_preds = [r.choice for r in eval_results]
+    uncal_confs = [r.top_probability for r in eval_results]
+    uncal_probs = [[r.probabilities.get(n, 0.0) for n in label_names] for r in eval_results]
+    uncal_corr  = [p == t for p, t in zip(uncal_preds, eval_true_labels)]
+    
+    acc_uncal = accuracy(uncal_preds, eval_true_labels)
+    ece_uncal = ece_score(uncal_confs, uncal_corr)
+    brier_uncal = brier_score(uncal_probs, eval_true_indices, n_classes)
+    nll_uncal = nll_score(uncal_probs, eval_true_indices)
+
+    table_data = [
+        ["Uncalibrated", "1.000", f"{acc_uncal:.1f}%", f"{ece_uncal:.2f}%", f"{brier_uncal:.4f}", f"{nll_uncal:.4f}"]
     ]
-    true_indices = [label_list.index(t) for t in true_labels]
 
-    uncal_ece = expected_calibration_error(uncal_conf, uncal_acc)
-    uncal_brier = brier_score(uncal_probs, true_indices)
-    uncal_nll = nll_score(uncal_probs, true_indices)
-
-    print(f"Uncalibrated (N={len(results_raw)} eval):")
-    print(f"  ECE:   {uncal_ece * 100:.2f}%")
-    print(f"  Brier: {uncal_brier:.4f}")
-    print(f"  NLL:   {uncal_nll:.4f}")
-    print(f"  Acc:   {np.mean(uncal_acc)*100:.2f}%")
-
-    # ── Sweep calibration sizes ───────────────────────────────────────────────
-    all_metrics: list[CalibMetrics] = []
-
-    for n_calib in calib_sizes:
-        calib_results = results_raw[:n_calib]
-        calib_labels = true_labels[:n_calib]
-
+    # Iterative Calibrated
+    for n_calib in CALIB_SIZES:
+        subset_res = calib_results[:n_calib]
+        subset_lbl = calib_labels[:n_calib]
+        
         scaler = TemperatureScaler()
-        scaler.fit(calib_results, calib_labels)
-        t_fitted = scaler.temperature.clamp(min=1e-3).item()
+        scaler.fit(subset_res, subset_lbl)
+        T = scaler.temperature.item()
+        
+        cal_preds, cal_confs, cal_probs = [], [], []
+        for r in eval_results:
+            cal_r = scaler.transform(r)
+            cal_preds.append(cal_r.choice)
+            cal_confs.append(cal_r.top_probability)
+            cal_probs.append([cal_r.probabilities.get(n, 0.0) for n in label_names])
+            
+        cal_corr = [p == t for p, t in zip(cal_preds, eval_true_labels)]
+        acc_cal = accuracy(cal_preds, eval_true_labels)
+        ece_cal = ece_score(cal_confs, cal_corr)
+        brier_cal = brier_score(cal_probs, eval_true_indices, n_classes)
+        nll_cal = nll_score(cal_probs, eval_true_indices)
+        
+        table_data.append([
+            f"N = {n_calib}",
+            f"{T:.3f}",
+            f"{acc_cal:.1f}%",
+            f"{ece_cal:.2f}%",
+            f"{brier_cal:.4f}",
+            f"{nll_cal:.4f}"
+        ])
 
-        # Apply calibration to the full eval set
-        cal_conf = []
-        cal_acc = []
-        cal_probs = []
-
-        for res, label in zip(results_raw, true_labels):
-            cal_res = scaler.transform(res)
-            cal_conf.append(cal_res.top_probability)
-            cal_acc.append(1.0 if cal_res.choice == label else 0.0)
-            cal_probs.append([
-                cal_res.probabilities.get("YES", 0.0),
-                cal_res.probabilities.get("NO", 0.0),
-            ])
-
-        cal_ece = expected_calibration_error(cal_conf, cal_acc)
-        cal_brier = brier_score(cal_probs, true_indices)
-        cal_nll = nll_score(cal_probs, true_indices)
-
-        m = CalibMetrics(
-            n_calib=n_calib,
-            temperature=t_fitted,
-            ece_before=uncal_ece,
-            ece_after=cal_ece,
-            brier_before=uncal_brier,
-            brier_after=cal_brier,
-            nll_before=uncal_nll,
-            nll_after=cal_nll,
-        )
-        all_metrics.append(m)
-
-    # ── Print table ───────────────────────────────────────────────────────────
-    print("\n" + "=" * 82)
-    print("Calibration Scaling Results")
-    print("=" * 82)
-    header = (
-        f"{'N_calib':>8} | {'Temp':>6} | "
-        f"{'ECE(↓)':>14} | {'Brier(↓)':>14} | {'NLL(↓)':>14}"
-    )
-    print(header)
-    print("-" * 82)
-
-    # Uncalibrated baseline row
-    print(
-        f"{'Uncal':>8} | {'1.000':>6} | "
-        f"{'before':>7}{'after':>7} | "
-        f"{'before':>7}{'after':>7} | "
-        f"{'before':>7}{'after':>7}"
-    )
-    print(
-        f"{'':>8} | {'':>6} | "
-        f"{uncal_ece*100:>6.2f}%{'→':>1} | "
-        f"{uncal_brier:>6.4f}{'→':>1} | "
-        f"{uncal_nll:>6.4f}{'→':>1}"
-    )
-    print("-" * 82)
-
-    for m in all_metrics:
-        ece_delta = "↓" if m.ece_after < m.ece_before else "↑"
-        brier_delta = "↓" if m.brier_after < m.brier_before else "↑"
-        nll_delta = "↓" if m.nll_after < m.nll_before else "↑"
-        print(
-            f"{m.n_calib:>8} | {m.temperature:>6.3f} | "
-            f"{m.ece_before*100:>5.2f}%→{m.ece_after*100:>5.2f}%{ece_delta} | "
-            f"{m.brier_before:>6.4f}→{m.brier_after:>6.4f}{brier_delta} | "
-            f"{m.nll_before:>6.4f}→{m.nll_after:>6.4f}{nll_delta}"
-        )
-
-    print("=" * 82)
-
-    # ── Summary ───────────────────────────────────────────────────────────────
-    best_ece = min(all_metrics, key=lambda m: m.ece_after)
-    print(f"\nBest ECE achieved at N_calib={best_ece.n_calib}: "
-          f"{best_ece.ece_before*100:.2f}% → {best_ece.ece_after*100:.2f}% "
-          f"(T={best_ece.temperature:.3f})")
-
+    print("\n" + "=" * 70)
+    print("  FINAL CALIBRATION SCALING (Banking77)")
+    print("=" * 70)
+    headers = ["Calibration Set", "Temperature", "Accuracy", "ECE", "Brier", "NLL"]
+    print(tabulate(table_data, headers=headers, tablefmt="github"))
+    print("=" * 70)
+    print("Note: ECE naturally drops as calibration density increases.")
+    print("For 77 classes, N=2000 yields ~26 examples per class.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Calibration scaling benchmark.")
-    parser.add_argument("--eval", type=int, default=1000, dest="n_eval",
-                        help="Total evaluation examples (default: 1000)")
-    parser.add_argument("--sizes", type=int, nargs="+",
-                        default=[50, 100, 250, 500, 1000],
-                        help="Calibration sample sizes to sweep (default: 50 100 250 500 1000)")
-    parser.add_argument("--model", type=str, default="HuggingFaceTB/SmolLM-135M",
-                        help="HuggingFace model ID")
-    parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
-    run(n_eval=args.n_eval, calib_sizes=args.sizes, model_name=args.model, seed=args.seed)
+    main()
