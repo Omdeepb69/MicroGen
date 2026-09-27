@@ -295,3 +295,234 @@ microgen/
 ## 📜 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 📚 Exhaustive Module Documentation
+
+### 1. The `microgen.decision` Module
+
+The `decision` module provides a System-One-style API over any causal Language Model. It transforms LMs into constrained, probabilistic decision engines without generating any output tokens.
+
+#### **Architecture & Flow**
+
+Instead of generating text autoregressively and parsing the output, the engine performs a single prefill pass and evaluates valid candidates directly from the logits.
+
+```mermaid
+flowchart TD
+    Prompt[Context + Question] --> Prefill[Model Prefill Pass]
+    Prefill --> Logits[Logits extracted at last position]
+    
+    Candidates[Schema: 'YES', 'NO'] --> Trie[Batched BFS Trie Frontier]
+    
+    Logits --> Trie
+    Trie -->|Multi-token candidates| Decode[Targeted Decode Passes]
+    Decode --> Trie
+    
+    Trie --> Score[Candidate Scores & Length Normalization]
+    Score --> Calibrate[Optional Temperature Scaling]
+    Calibrate --> Prob[Probability Distribution & Entropy]
+    Prob --> Result[DecisionResult]
+```
+
+#### **Core Data Structures (`schema.py`)**
+
+The engine relies on strictly typed, immutable dataclasses to ensure decision boundaries are respected.
+
+- **`Choice`**: A single candidate option.
+  - `name: str` — The label used in probabilities.
+  - `value: Any` — Optional caller-defined payload.
+- **`ChoiceSchema`**: The full candidate set definition.
+  - `name: str` — Identifier (e.g., "boolq").
+  - `options: list[Choice]` — Must contain at least 2 options.
+- **`DecisionResult`**: The immutable output of an inference call.
+  - `choice: str` — The winning option.
+  - `probabilities: dict[str, float]` — Full normalized probability distribution.
+  - `top_probability: float` — Probability of the winning choice. (Note: explicitly not named `confidence` unless calibrated).
+  - `entropy: float` — Shannon entropy of the distribution in bits.
+  - `calibrated: bool` — True if a `TemperatureScaler` was applied.
+- **`CandidateStats`**: Diagnostic record for sequence scoring.
+  - Contains `token_count`, `token_ids`, `raw_logprob`, and `normalized_score`.
+
+#### **The `DecisionEngine` (`engine.py`)**
+
+The `DecisionEngine` is the primary entrypoint. It wraps an underlying `DecisionModel` (via `adapters.py`) and routes requests to the fast single-token scorer or the Batched Trie sequence scorer.
+
+**`choose(context, schema, temperature=1.0, alpha=1.0)`**
+The core method. Scores each option in the schema against the context.
+- `alpha`: Length normalization penalty ($S_\alpha = \frac{\sum \log P}{|Y|^\alpha}$).
+- **Example Use Case:** Selecting a strategic action in a robotics pipeline.
+
+```python
+from microgen.decision.schema import Choice, ChoiceSchema
+from microgen.decision.engine import DecisionEngine
+
+schema = ChoiceSchema(name="action", options=[
+    Choice("TURN LEFT"), Choice("TURN RIGHT"), Choice("STOP")
+])
+result = engine.choose("Obstacle detected ahead.", schema=schema)
+
+print(result.choice)             # "STOP"
+print(result.probabilities)      # {"TURN LEFT": 0.1, "TURN RIGHT": 0.1, "STOP": 0.8}
+print(f"Entropy: {result.entropy:.2f} bits")
+```
+
+**`yes_no(context, question, temperature=1.0)`**
+A high-level wrapper around `choose()` for boolean tasks.
+```python
+result = engine.yes_no(context="User is asking for financial advice.", question="Is this safe?")
+if result.choice == "NO" and result.top_probability > 0.9:
+    block_request()
+```
+
+**`score(context, criteria, scale, temperature=1.0)`**
+A high-level wrapper around `choose()` for discrete integer scaling (e.g., 1-5 rating).
+```python
+result = engine.score("The code is missing tests.", criteria="Quality", scale=[1, 2, 3, 4, 5])
+print(result.choice) # "2"
+```
+
+#### **Batched Trie Sequence Scoring (`constrained.py`)**
+
+For multi-token candidates, scoring sequentially ($O(N)$) causes latency to explode as vocabulary spaces grow (e.g., 77 classes). MicroGen solves this via a **Batched BFS Trie Frontier**.
+
+1. Candidates are tokenized and organized into a Prefix Trie.
+2. The engine evaluates all active branches at depth $D$ in a single batched PyTorch forward pass.
+3. Latency scales by the *depth* of the longest candidate, not the *breadth* of the candidate space.
+
+*Metrics:* Evaluated on a Tesla T4, latency for 10 candidates vs. 77 candidates remains essentially flat (~320ms) because both share a maximum depth of 6 tokens.
+
+#### **Calibration & Entropy (`calibration.py`, `entropy.py`)**
+
+MicroGen evaluates the reliability of a decision using standard information theory metrics rather than raw logits.
+
+- **Shannon Entropy**: Calculated natively for every decision, representing the uncertainty in bits across the candidate distribution.
+- **Temperature Scaling (`TemperatureScaler`)**: Fits a scalar `T` using L-BFGS over a validation dataset to minimize Negative Log Likelihood (NLL). Can transform uncalibrated `DecisionResult` objects into calibrated probabilities.
+
+```python
+from microgen.decision.calibration import TemperatureScaler
+
+scaler = TemperatureScaler()
+scaler.fit(validation_results, true_labels) # Fits T to minimize NLL
+calibrated_result = scaler.transform(raw_result)
+print(calibrated_result.calibrated) # True
+```
+
+### 2. The `backends` & `engine` Modules
+
+The core generation architecture separates the high-level orchestration API (`LLMEngine`) from the hardware-specific forward pass execution (`InferenceBackend`). This allows the same `DecisionEngine` and `LLMEngine` to run seamlessly over quantized, tensor-parallel, or standard PyTorch weights.
+
+#### **The `InferenceBackend` Protocol (`backends/base.py`)**
+
+The fundamental abstraction boundary. All core logic interacts only with the backend's `prefill` and `decode` methods, ensuring hardware agnosticism.
+
+- **`prefill(input_ids, attention_mask, cache)`**
+  Performs the initial un-cached forward pass over a prompt. Returns `(logits, updated_cache)`.
+- **`decode(token_ids, attention_mask, cache)`**
+  Performs a single-token forward pass utilizing the KV cache. Returns `(logits, updated_cache)`.
+
+**Available Backend Implementations:**
+1. **`PyTorchBackend`** (`pytorch.py`): Standard HuggingFace `AutoModelForCausalLM` loading and inference (FP32/FP16/BF16).
+2. **`QuantizedPyTorchBackend`** (`quantized.py`): Leverages BitsAndBytes for 8-bit (`int8`) or 4-bit/fp8 inference, drastically reducing VRAM footprints.
+3. **`TensorParallelPyTorchBackend`** (`parallel.py`): Implements Megatron-1D tensor parallelism. Shards linear projections (Attention Q/K/V/O, MLP Gate/Up/Down) across multiple GPUs via `torch.distributed`, accelerating memory-bound decoding.
+
+#### **The `LLMEngine` SDK (`sdk/engine.py`)**
+
+The high-level developer-facing LLM engine interface. Provides automated backend dispatch and exposes standard text generation parameters.
+
+**`LLMEngine.from_pretrained(...)`**
+Factory method that automatically instantiates the correct `InferenceBackend` based on user flags.
+- `model_name_or_path`: HuggingFace ID (e.g., "Qwen/Qwen2.5-1.5B-Instruct").
+- `quantize`: Set to `"int8"` or `"fp8"`. Dispatches to `QuantizedPyTorchBackend`.
+- `tensor_parallel_size`: If $>1$, dispatches to `TensorParallelPyTorchBackend` allocating ranks across available GPUs.
+
+**`generate(prompt, max_new_tokens=50, stream=False, temperature=1.0)`**
+Implements classic autoregressive text generation over the backend primitives. If `stream=True`, yields an `Iterator[str]` for SSE event streaming or CLI type-writer effects.
+
+```python
+from microgen.sdk.engine import LLMEngine
+
+engine = LLMEngine.from_pretrained(
+    "Qwen/Qwen2.5-1.5B", 
+    quantize="int8", 
+    tensor_parallel_size=1
+)
+
+for token in engine.generate("The capital of France is", stream=True):
+    print(token, end="", flush=True)
+```
+
+### 3. The `scheduler` & `memory` Modules
+
+These modules power the continuous request batching and high-performance KV cache allocation that allow MicroGen to sustain high throughput.
+
+#### **Continuous Batching Scheduler (`scheduler/scheduler.py`, `queue.py`)**
+
+The `ContinuousBatchingScheduler` implements iteration-level scheduling. Instead of waiting for an entire batch of requests to finish, it injects new requests at the prefill stage as soon as batch slots become available.
+
+- **`RequestQueue`**: Thread-safe priority queue managing pending inference requests (`Request` objects tracking `ttft_ms`, `tpot_ms`, and `priority`).
+- **`step()`**: The core scheduling loop. 
+  1. Pops up to `max_batch_size` pending requests and executes a batched `prefill`.
+  2. Executes a batched `decode` for all currently active running requests.
+  3. Evicts requests that hit `max_new_tokens` or emit an EOS token.
+- **Micro-Profiling**: The scheduler tracks internal execution overhead natively via `profiling_stats`, isolating Python event loop overheads from CUDA kernel time.
+
+```python
+from microgen.scheduler.scheduler import ContinuousBatchingScheduler
+from microgen.scheduler.queue import Request
+
+scheduler = ContinuousBatchingScheduler(backend=backend, kv_cache_manager=manager, max_batch_size=8)
+scheduler.add_request(Request(request_id="1", prompt="Hello", prompt_ids=[1,2,3]))
+
+# Run until all requests finish
+completed = scheduler.run_until_complete()
+```
+
+#### **KV Cache Management (`runtime/kv_cache.py`, `runtime/paged_kv.py`)**
+
+Memory management is crucial for LLM serving. MicroGen provides two paradigms:
+
+1. **`KVCacheState`**: A dynamic per-request cache state that subclasses HuggingFace's `Cache`. 
+   - Tracks `key_cache` and `value_cache` across all layers.
+   - **Trie Routing Support**: Implements `expand_batch` and `gather_batch` to support the Batched BFS Trie Frontier, allowing cache branching without redundant prefill passes.
+   - **Quantization**: Natively supports per-vector INT8 KV cache quantization (`quantize_kv=True`), effectively halving memory requirements.
+
+2. **`PagedKVCacheAllocator`**: Implements physical block paging (inspired by vLLM's PagedAttention).
+   - Manages a pool of fixed-size `PhysicalBlock` objects (e.g., 16 tokens per block).
+   - `BlockTable` maps logical sequence tokens to physical blocks dynamically.
+   - Eliminates external memory fragmentation ($F_{ext} = 0$) by avoiding contiguous memory allocations for unpredictable sequence lengths.
+
+### 4. The `api`, `cli`, & `sdk` Modules
+
+These modules provide the external boundaries of the MicroGen framework, exposing internal engine optimizations to users and CI systems.
+
+#### **Python SDK (`sdk/engine.py`)**
+
+As detailed in Section 2, the `LLMEngine` is the primary entrypoint for programmatic usage. It allows developers to load models in 1 line with automated hardware-aware backend dispatch (`PyTorch`, `INT8`, `TP=2`).
+
+#### **Command-Line Interface (`cli/main.py`)**
+
+MicroGen exposes a rich, unified Click CLI for interactive terminal usage and automated benchmarking.
+
+- **`microgen chat`**: Launches an interactive, streaming terminal session.
+- **`microgen serve`**: Boots the FastAPI HTTP server using continuous batching.
+- **`microgen benchmark`**: Runs an automated synthetic throughput/latency benchmark using `WorkloadGenerator`.
+- **`microgen generate`**: Executes a one-shot generation prompt.
+- **`microgen profile`**: Runs a micro-profiling trace (Prefill/Decode ratio) and outputs bottleneck diagnostics.
+
+**Example CLI Usage:**
+```bash
+microgen chat --model Qwen/Qwen2.5-1.5B-Instruct --device cuda --quantize int8
+microgen benchmark --model sshleifer/tiny-gpt2 --num-requests 100 --max-tokens 32
+```
+
+#### **FastAPI Server (`api/app.py`)**
+
+A production-ready HTTP server exposing OpenAI-compatible endpoints. It deeply integrates with the `ContinuousBatchingScheduler` to manage concurrent incoming requests asynchronously.
+
+**Endpoints:**
+- `GET /health` & `GET /v1/models`
+- `POST /v1/completions`: Standard text generation.
+- `POST /v1/chat/completions`: Chat generation format (roles + messages).
+
+Both `completions` endpoints natively support `stream=True`, returning standard Server-Sent Events (SSE) `text/event-stream` chunks for seamless frontend integration.
